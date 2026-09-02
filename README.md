@@ -159,6 +159,27 @@ uv run llm-lab run compare \
 
 `--prompt-template` is a file containing `{input}` (and any other dataset fields) for the default one-prompt-per-row task. Results stream to `runs/experiment-1/results.jsonl` (crash-safe) and flatten to `results.csv`; re-running resumes where it left off (`--no-resume` to disable). Use `--limit N` for a quick pilot.
 
+### `run compare` options
+
+| Option | Required | Default | What it does |
+|---|---|---|---|
+| `--dataset FILE` | **yes** | — | JSONL test set; one record per line. `input` is filled into the prompt template; other fields are available to custom tasks and eval `{variables}`. |
+| `--task module:Class` | one of `--task`/`--prompt-template` | — | Custom task (`run(record, client) -> TaskOutput`) for multi-step pipelines, scoping, or retrieval. Imported from the current directory (e.g. `examples.my_task:MyTask`). See [Complex Prompts and Custom Tasks](docs/complex-prompts-and-custom-tasks.md). |
+| `--prompt-template FILE` | one of `--task`/`--prompt-template` | — | Template file for the default one-prompt-per-row task; contains `{input}` and any other dataset fields. Mutually exclusive with `--task`. |
+| `--model provider/id` | **yes** (≥1) | — | A candidate model to test. Repeat the flag for each model (`--model a --model b`). See [Connecting Your LLMs](#connecting-your-llms) for id formats. |
+| `--models a,b,c` | — | — | Comma-separated model ids, as an alternative or supplement to repeated `--model`. |
+| `--eval NAME` | — | all evals in `--eval-dir` | An eval to score with: a folder name under `--eval-dir`, or a path to an eval directory. Repeatable. Omit to run every eval found in `--eval-dir`. |
+| `--eval-dir DIR` | — | `evals_kit` | Directory searched for evals (each is a subfolder with `eval.yaml` + `prompt.md`). |
+| `--judge-model provider/id` | — | none | Enables LLM-judge scoring for evals that have a rubric. Without it, rubric evals are skipped (a warning is printed); programmatic checks still run. |
+| `--out-dir DIR` | — | `runs/<timestamp>` | Where `results.jsonl` / `results.csv` are written. Reuse a directory to resume or grow a run. |
+| `--resume` / `--no-resume` | — | `--resume` | Skip `(model, record)` pairs already in the run's `results.jsonl`. `--no-resume` re-runs everything (appends, so prefer a fresh `--out-dir`). |
+| `--limit N` | — | all records | Only the first N records — handy for a smoke test before a full sweep. |
+
+Notes:
+- Provide exactly one of `--task` or `--prompt-template`, and at least one `--model`.
+- The sweep is **model × record**; every model answers every prompt and each eval scores each pair, which is what makes the [result analysis](#result-analysis) a paired design.
+- Resume keys on the record's `id` field (or a generated hash if absent) — give records stable `id`s so resume and analysis line up across runs.
+
 **Prompts with several inputs, org/tenant scoping, retrieval, or a multi-step pipeline?** Multi-variable templates work out of the box, and anything needing extra steps is a custom `--task` — see [Complex Prompts and Custom Tasks](docs/complex-prompts-and-custom-tasks.md).
 
 ## Connecting Your LLMs

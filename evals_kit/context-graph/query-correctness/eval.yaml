@@ -1,0 +1,15 @@
+# Ported from evals-as-code/evals/query-correctness for llm_lab.
+# Trace-query metadata stripped (llm_lab EvalSpec forbids those keys).
+# Variables ({input}, {queries}) come from the record + task aux.
+name: Query Correctness
+description: >-
+  Judges whether the agent has created queries that correctly and accurately reflect the human prompt.
+direction: MAXIMIZE
+labels:
+  "All present queries are syntactically valid openCypher, semantically address the question, and have org scoping properly applied.": 5
+  "All queries are valid and mostly accurate but one or two miss nuance (e.g., finds related data but not the most direct path)": 4
+  "At least one query is valid and topical, but one or more have significant gaps. All would run syntactically.": 3
+  "At least one query is valid and topical, but one or more queries will not run and are fatally flawed syntactically.": 2
+  "All queries are syntactically flawed and will not run.": 1
+include_explanations: true
+prompt_file: prompt.md
