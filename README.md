@@ -71,7 +71,7 @@ uv run llm-lab evals validate             # check every eval in evals_kit/ parse
 - **Programmatic checks** — deterministic, no model needed: `exact_match`, `contains`, `regex`, `json_schema`, `numeric_tolerance`.
 - **Operational** — `latency`, `cost` thresholds read from each call's metadata.
 
-For guidance on *what* evals to create and how to design good rubrics, see the FAQ.
+For the full `eval.yaml` key list, how the judge prompt is filled and scored, and each scorer's parameters, see the [Eval Reference](docs/eval-reference.md). For guidance on *what* evals to create and how to design good rubrics, see the FAQ.
 
 # Pilot Study
 
@@ -207,6 +207,44 @@ Check providers and test connectivity:
 uv run llm-lab models list                 # registered providers + example ids
 uv run llm-lab models ping ollama/llama3.1  # one short call, prints latency/result
 ```
+
+## Understanding the Output
+
+Each run directory (`--out-dir`) holds two data files plus, after `analyze`, the analysis artifacts.
+
+**`results.jsonl`** — the source of truth, appended crash-safe as the run proceeds: one JSON object per `(model, record)`. Fields:
+
+| Field | Meaning |
+|---|---|
+| `model_id`, `record_id` | which model, which dataset record (`record_id` is the record's `id`, or a generated hash) |
+| `input` | the full dataset record (all its fields) |
+| `output` | the model's answer that the evals scored |
+| `prompt` | the prompt actually sent (for debugging) |
+| `latency_s`, `usage`, `cost_usd` | timing / token / cost metadata from the model call |
+| `error` | **task-level** error — the row produced no usable output (model failure or a custom task that raised); `null` on success |
+| `scores` | list of per-scorer results: `eval`, `scorer`, `score`, `label`, `passed`, `reasoning`, `error` |
+| `timestamp` | when the row was written |
+
+**`results.csv`** — `results.jsonl` flattened to one row per `(model, record, scorer)` for spreadsheets/pandas:
+
+| Column | Meaning |
+|---|---|
+| `model_id`, `record_id` | as above |
+| `eval`, `scorer` | which eval and which scorer produced this row |
+| `score` | the numeric score (rubric level, `1.0`/`0.0` for a check, or the measured latency/cost) |
+| `label` | the rubric label the judge chose (judge evals only) |
+| `passed` | pass/fail — set by programmatic checks and operational thresholds; **blank for judge rubrics** (they report a graded score, not pass/fail) |
+| `latency_s`, `cost_usd` | per-call metadata |
+| `task_error` | the row's task-level `error` (whole task failed → no scores) |
+| `score_error` | one scorer failed while others may have succeeded (e.g. judge couldn't be reached) |
+
+The `task_error` vs `score_error` split tells you *where* a failure happened: `task_error` means generation/execution never produced an output; `score_error` means the output exists but a specific scorer failed.
+
+**End-of-run tables** printed to the console:
+- **Comparison summary** — per `(model, eval, scorer)`: `n`, mean score, pass rate, error count. Pass rate is shown only for scorers that emit pass/fail; judge rubrics show a mean score with a blank pass rate.
+- **Per-model reliability** — per model: number of runs, task errors, mean latency, total cost.
+
+**Resume** keys on `(model_id, record_id)` present in `results.jsonl` — including rows that errored. So a re-run with `--resume` (the default) skips already-recorded rows, errors included; to retry failures, fix the cause and either start a fresh `--out-dir` or delete the run directory. Give records stable `id`s so resume lines up across runs.
 
 ## Result Analysis
 
