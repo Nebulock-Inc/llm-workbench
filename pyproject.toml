@@ -41,4 +41,11 @@ anthropic = [
 analysis = [
     "matplotlib>=3.11.1",
     "pandas>=3.0.5",
+    "scipy>=1.11",
+    "statsmodels>=0.14",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
