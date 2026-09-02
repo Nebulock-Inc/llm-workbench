@@ -1,0 +1,11 @@
+name: demo-quality
+description: Judges answer quality
+direction: MAXIMIZE
+labels:
+  Fully and accurately satisfies the criterion.: 5
+  Satisfies the criterion with minor gaps.: 4
+  Partially satisfies the criterion.: 3
+  Barely satisfies the criterion.: 2
+  Does not satisfy the criterion.: 1
+include_explanations: true
+prompt_file: prompt.md
