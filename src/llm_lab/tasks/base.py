@@ -8,6 +8,9 @@ from typing import Any, Protocol, runtime_checkable
 from llm_lab.models.base import ModelClient
 from llm_lab.object_types import Response
 
+from llm_lab.evals.template import fill_template
+from llm_lab.object_types import GenerationRequest
+
 
 @dataclass
 class TaskOutput:
@@ -22,3 +25,21 @@ class Task(Protocol):
     name: str
 
     def run(self, record: dict[str, Any], client: ModelClient) -> TaskOutput: ...
+
+
+class PromptTemplateTask:
+    """Default task: fill a {placeholder} template from each record, call the model,
+    return its answer. Covers the common 'one prompt per input row' case with no code.
+    """
+
+    def __init__(self, template: str, *, name: str = "prompt-template",
+                 system: str | None = None, max_tokens: int | None = None) -> None:
+        self.template = template
+        self.name = name
+        self.system = system
+        self.max_tokens = max_tokens
+
+    def run(self, record: dict, client) -> TaskOutput:
+        prompt = fill_template(self.template, record)
+        resp = client.generate(GenerationRequest(prompt=prompt, system=self.system, max_tokens=self.max_tokens))
+        return TaskOutput(output=resp.text, prompt=prompt, response=resp)
