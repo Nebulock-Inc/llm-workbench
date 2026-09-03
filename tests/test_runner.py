@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from llm_lab.datasets.jsonl import read_jsonl
@@ -109,6 +111,25 @@ def test_custom_task_with_aux_end_to_end(tmp_path):
     results = _read_results(out / "results.jsonl")
     assert len(results) == 1 and results[0]["error"] is None
     assert results[0]["scores"][0]["score"] == 1.0
+
+
+def test_summary_and_csv_dedupe_to_latest(tmp_path):
+    from llm_lab.runner.results import summarize, write_csv
+
+    def row(ts, score):
+        return json.dumps({"model_id": "mock/m1", "record_id": "q0", "input": {}, "output": "",
+                           "prompt": None, "latency_s": 0.1, "usage": {}, "cost_usd": None,
+                           "error": None, "timestamp": ts,
+                           "scores": [{"eval": "E", "scorer": "judge", "score": score, "error": None}]})
+
+    (tmp_path / "results.jsonl").write_text(row("2026-01-01T00:00:00", 2.0) + "\n" +
+                                            row("2026-02-01T00:00:00", 5.0) + "\n")
+    judge = next(r for r in summarize(tmp_path) if r["scorer"] == "judge")
+    assert judge["n"] == 1 and judge["mean_score"] == 5.0   # latest, not n=2 or mean 3.5
+
+    write_csv(tmp_path)
+    lines = (tmp_path / "results.csv").read_text().strip().splitlines()
+    assert len(lines) == 2  # header + one deduped row
 
 
 def test_limit(tmp_path):

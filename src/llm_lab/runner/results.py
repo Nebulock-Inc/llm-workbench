@@ -66,6 +66,29 @@ def _read_results(path: str | Path) -> list[dict[str, Any]]:
     return out
 
 
+def dedupe_latest(records: list[dict[str, Any]], *, successful_only: bool = False) -> list[dict[str, Any]]:
+    """Keep only the most recent row per (model_id, record_id), by timestamp.
+
+    Re-runs, retries, and grown pilots append new rows for a (model, prompt) pair, so
+    duplicates must collapse to one — the latest attempt — rather than being counted
+    twice or averaged together.
+
+    `successful_only=True` first drops rows with a task-level error, so the QUALITY path
+    keeps the latest *successful* run per pair (matching the source pipeline, which
+    excludes failures then keeps last). Reliability leaves it False to reflect the final
+    outcome — including a failure that superseded an earlier success.
+    """
+    if successful_only:
+        records = [r for r in records if not r.get("error")]
+    latest: dict[tuple, dict[str, Any]] = {}
+    for record in records:
+        key = (record.get("model_id"), record.get("record_id"))
+        current = latest.get(key)
+        if current is None or str(record.get("timestamp", "")) >= str(current.get("timestamp", "")):
+            latest[key] = record
+    return list(latest.values())
+
+
 def load_completed(out_dir: str | Path) -> set[tuple[str, str]]:
     """The (model_id, record_id) pairs already present in results.jsonl."""
     return {(r.get("model_id"), r.get("record_id")) for r in _read_results(Path(out_dir) / "results.jsonl")}
@@ -75,7 +98,7 @@ def write_csv(out_dir: str | Path) -> Path:
     """Flatten results.jsonl to one CSV row per (model, record, scorer)."""
     out_dir = Path(out_dir)
     rows: list[dict[str, Any]] = []
-    for r in _read_results(out_dir / "results.jsonl"):
+    for r in dedupe_latest(_read_results(out_dir / "results.jsonl"), successful_only=True):
         base = {"model_id": r["model_id"], "record_id": r["record_id"],
                 "latency_s": r["latency_s"], "cost_usd": r["cost_usd"], "task_error": r["error"]}
         scores = r.get("scores") or []
@@ -100,7 +123,7 @@ def write_csv(out_dir: str | Path) -> Path:
 def summarize(out_dir: str | Path) -> list[dict[str, Any]]:
     """Aggregate per (model, eval, scorer): mean score, pass rate, n, error count."""
     agg: dict[tuple, list] = defaultdict(list)
-    for r in _read_results(Path(out_dir) / "results.jsonl"):
+    for r in dedupe_latest(_read_results(Path(out_dir) / "results.jsonl"), successful_only=True):
         for s in r.get("scores") or []:
             agg[(r["model_id"], s["eval"], s["scorer"])].append((s.get("score"), s.get("passed"), s.get("error")))
     rows = []
@@ -117,7 +140,7 @@ def summarize(out_dir: str | Path) -> list[dict[str, Any]]:
 
 
 def print_summary(out_dir: str | Path) -> None:
-    results = _read_results(Path(out_dir) / "results.jsonl")
+    results = dedupe_latest(_read_results(Path(out_dir) / "results.jsonl"))
     rows = summarize(out_dir)
     if not rows:
         _console.print("No scores to summarize.")

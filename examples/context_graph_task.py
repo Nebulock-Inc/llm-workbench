@@ -37,7 +37,6 @@ Dataset rows (one JSON object per line):
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -46,21 +45,15 @@ from llm_lab.evals.template import fill_template
 from llm_lab.object_types import GenerationRequest
 from llm_lab.tasks.base import TaskOutput
 
-# Opt-in per-stage progress logging. Set CONTEXT_GRAPH_VERBOSE=1 to see the
-# query-gen / validation / org-scope / execution / synthesis activity per record:
-#   CONTEXT_GRAPH_VERBOSE=1 llm-lab run compare ...
-_VERBOSE = os.environ.get("CONTEXT_GRAPH_VERBOSE", "").strip().lower() not in ("", "0", "false", "no")
-
-
-def _log(msg: str) -> None:
-    if _VERBOSE:
-        print(msg, flush=True)
-
 # Make the sibling pipeline module importable however this task is loaded
 # (as `examples.context_graph_task` from the repo root, or `context_graph_task`
 # from within examples/).
 sys.path.insert(0, str(Path(__file__).parent))
 
+# _log is shared with the pipeline module and gated by CONTEXT_GRAPH_VERBOSE=1, which
+# surfaces per-stage progress (query-gen / validation / org-scope / execution /
+# synthesis) and the pipeline's benign actor-resolution notes:
+#   CONTEXT_GRAPH_VERBOSE=1 llm-lab run compare ...
 from context_graph_pipeline import (  # noqa: E402
     GRAPH_SECTION,
     NEPTUNE_BLUE_ENDPOINT,
@@ -73,6 +66,7 @@ from context_graph_pipeline import (  # noqa: E402
     run_query,
     validate_cypher,
     _inject_org_scope,
+    _log,
 )
 
 _PROMPT_DIR = Path(__file__).parent / "context_graph_prompts"

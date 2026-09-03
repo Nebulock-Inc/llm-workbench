@@ -69,6 +69,16 @@ from src.services.agents.shared.actor_resolution import _resolve_to_actors  # no
 _neptune_client_mod.AWS_PROFILE = os.environ.get("CONTEXT_GRAPH_NEPTUNE_PROFILE", "prod")
 _neptune_client_mod.close_neptune_client()
 
+# Opt-in per-stage progress logging, shared with context_graph_task. Set
+# CONTEXT_GRAPH_VERBOSE=1 to surface pipeline activity (query-gen, execution) and the
+# benign actor-resolution notes below; quiet by default during normal runs.
+_VERBOSE = os.environ.get("CONTEXT_GRAPH_VERBOSE", "").strip().lower() not in ("", "0", "false", "no")
+
+
+def _log(msg: str) -> None:
+    if _VERBOSE:
+        print(msg, flush=True)
+
 # Pin execution to the BLUE prod Neptune cluster: an explicit endpoint bypasses the
 # SSM active-pointer resolution so a blue/green cutover never redirects us to green.
 NEPTUNE_BLUE_ENDPOINT = os.environ.get(
@@ -301,10 +311,12 @@ def resolve_actor_params(organization_id: str, identifiers) -> Dict[str, list]:
         try:
             resolved = _resolve_to_actors(lane, value, state, span)
         except Exception as e:  # never let resolution break the workflow
-            print(f"⚠️  actor resolution error for {lane}={value!r}: {e}")
+            _log(f"⚠️  actor resolution error for {lane}={value!r}: {e}")
             continue
         if isinstance(resolved, str):
-            print(f"ℹ️  no actors for {lane}={value!r}: {resolved[:80]}")
+            # Sentinel: unreachable / not configured / no match / per-request budget
+            # reached. Benign — this identifier just contributes nothing.
+            _log(f"ℹ️  no actors for {lane}={value!r}: {resolved[:80]}")
             continue
         for a in resolved.actors:
             user_ids.update(a.user_identifiers)
