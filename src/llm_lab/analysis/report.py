@@ -342,6 +342,7 @@ def _markdown(report: dict) -> str:
         lines += _md_table(["model", "mean", "sd", "n"],
                            [[label(m), f"{s['mean']:.3f}", f"{s['std']:.3f}", s["count"]]
                             for m, s in sorted(report["overall_means"].items(), key=lambda kv: -kv[1]["mean"])])
+        lines += ["![Quality distribution](composite_violin.png)"]
 
     if report.get("metrics"):
         lines += ["## Mean score by metric × model", ""]
@@ -368,6 +369,8 @@ def _markdown(report: dict) -> str:
         if mm and mm.get("error"):
             lines += [f"_Mixed model skipped: {mm['error']}_", ""]
         elif mm and mm.get("effects"):
+            lines += ["![Effect Sizes and Significance](composite_effects.png)"]
+
             lines += [f"**Difference vs {_short(ref)}** (random intercept per prompt):", ""]
             lines += _md_table(["model", "coef", "95% CI", "p", "real?"],
                                [[_short(e["model"]), f"{e['coef']:+.3f}",
@@ -376,6 +379,7 @@ def _markdown(report: dict) -> str:
             if mm.get("summary_text"):
                 lines += ["<details><summary>Full mixed-effects model summary</summary>", "",
                           "```", mm["summary_text"], "```", "</details>", ""]
+
         if comp.get("cohens_d"):
             lines += ["### Paired Cohen's d", ""]
             lines += _md_table(["pair", "mean diff", "d", "magnitude"],
