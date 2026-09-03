@@ -121,9 +121,25 @@ def _analyze_matrix(metric, matrix, *, graded, reference, alpha, margin, mixed_l
     return report
 
 
+def _reliability_table(rows: list[dict]) -> Table:
+    table = Table(title="Reliability — task completion", title_justify="left", header_style="bold")
+    for col in ("model", "runs", "errors", "success rate"):
+        table.add_column(col)
+    for r in rows:
+        table.add_row(_short(r["model"]), str(r["n"]), str(r["errors"]), f"{r['success_rate'] * 100:.0f}%")
+    return table
+
+
 def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_dir=None,
                  make_plots=True, eval_filter=None, scorer_filter=None) -> dict:
     from llm_lab.analysis import frame
+
+    # Reliability first, from the raw results (counts failed rows too), so it shows
+    # even when the quality frame is empty because a model failed every prompt.
+    reliability = frame.reliability(results_path)
+    _console.print(_reliability_table(reliability))
+    _console.print("[dim]Reliability = fraction of prompts that produced a usable answer; "
+                   "quality stats below are computed only over successful prompts.[/dim]\n")
 
     long_df = frame.load_long(results_path)
     if eval_filter:
@@ -147,7 +163,7 @@ def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_di
                    "Tests run only where appropriate for each metric.[/dim]")
 
     report: dict[str, Any] = {"models": models, "reference": reference, "alpha": alpha,
-                              "margin": margin, "metrics": {}, "composite": None}
+                              "margin": margin, "reliability": reliability, "metrics": {}, "composite": None}
 
     for metric in sorted(long_df["metric"].unique()):
         matrix = frame.metric_pivot(long_df, metric)
@@ -213,6 +229,14 @@ def _markdown(report: dict) -> str:
              f"- Models: {', '.join(report['models'])}",
              f"- Reference: {report['reference']}",
              f"- alpha={report['alpha']}, equivalence margin=±{report['margin']}", ""]
+    if report.get("reliability"):
+        lines.append("## Reliability (task completion)")
+        lines.append("- success rate = fraction of prompts that produced a usable answer "
+                     "(quality metrics below cover only successful prompts)")
+        for r in report["reliability"]:
+            lines.append(f"  - {_short(r['model'])}: {r['success_rate'] * 100:.0f}% "
+                         f"({r['n'] - r['errors']}/{r['n']}, {r['errors']} error(s))")
+        lines.append("")
     sections = list(report["metrics"].items())
     if report["composite"]:
         sections.append(("quality_composite", report["composite"]))

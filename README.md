@@ -254,7 +254,9 @@ The `task_error` vs `score_error` split tells you *where* a failure happened: `t
 uv run llm-lab analyze runs/experiment-1 --reference anthropic/claude-sonnet-4-5
 ```
 
-For each metric and an overall quality composite it reports, where appropriate:
+It first reports **reliability** — each model's task-completion rate (fraction of prompts that produced a usable answer, computed from every recorded row including failures). This matters because the quality stats below are complete-case: they only cover prompts a model actually answered, so a model that fails often can still post strong quality scores. Read reliability and quality together.
+
+Then, for each metric and an overall quality composite, it reports where appropriate:
 
 - **Nonparametric**: Friedman test + Kendall's W (omnibus across ≥3 models), with Holm-corrected pairwise Wilcoxon signed-rank post-hocs.
 - **Mixed-effects model**: `score ~ model` with a random intercept per prompt — each model's difference from the reference, with significance. (Graded metrics only; skipped for binary pass/fail.)

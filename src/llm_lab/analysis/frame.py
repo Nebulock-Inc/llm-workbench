@@ -65,6 +65,40 @@ def load_long(results_path: str | Path) -> pd.DataFrame:
     return df
 
 
+def reliability(results_path: str | Path) -> list[dict]:
+    """Per-model task-completion reliability, read straight from results.jsonl.
+
+    A row is a *success* when its task-level `error` is null (it produced a usable
+    output that the evals could score). Unlike `load_long`, this counts EVERY recorded
+    row — including task failures, which have no `scores` and are otherwise invisible to
+    the analysis — so a model that fails prompts is reflected here. Returns
+    [{model, n, errors, success_rate}] sorted by success_rate descending.
+    """
+    path = Path(results_path)
+    if path.is_dir():
+        path = path / "results.jsonl"
+    if not path.is_file():
+        raise FileNotFoundError(f"Results file not found: {path}")
+
+    counts: dict[str, dict[str, int]] = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        record = json.loads(line)
+        c = counts.setdefault(record["model_id"], {"n": 0, "errors": 0})
+        c["n"] += 1
+        if record.get("error"):
+            c["errors"] += 1
+    rows = [
+        {"model": m, "n": c["n"], "errors": c["errors"],
+         "success_rate": (c["n"] - c["errors"]) / c["n"] if c["n"] else 0.0}
+        for m, c in counts.items()
+    ]
+    rows.sort(key=lambda r: (-r["success_rate"], r["model"]))
+    return rows
+
+
 def metric_pivot(long_df: pd.DataFrame, metric: str) -> pd.DataFrame:
     """Complete-case (prompt x model) matrix for one metric: prompts scored by ALL models."""
     sub = long_df[long_df["metric"] == metric]
