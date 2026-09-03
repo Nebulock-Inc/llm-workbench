@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from llm_lab.runner.results import dedupe_latest
+
 # Scorer -> metric kind. `quality` = graded rubric (goes into the quality composite
 # and gets the mixed model / Cohen's d / TOST). `operational` = latency/cost (graded
 # but not "quality"). Everything else is treated as binary pass/fail.
@@ -27,23 +29,29 @@ def metric_kind(scorer: str, n_distinct: int) -> str:
     return "binary"
 
 
-def load_long(results_path: str | Path) -> pd.DataFrame:
-    """Explode results.jsonl into rows of (model, prompt_id, eval, scorer, metric, score, kind).
-
-    Rows with a missing score or a scorer error are dropped (they can't enter the stats).
-    """
+def _read_records(results_path: str | Path) -> list[dict]:
+    """Read every row of results.jsonl as a dict."""
     path = Path(results_path)
     if path.is_dir():
         path = path / "results.jsonl"
     if not path.is_file():
         raise FileNotFoundError(f"Results file not found: {path}")
-
-    rows = []
+    records = []
     for line in path.read_text().splitlines():
         line = line.strip()
-        if not line:
-            continue
-        record = json.loads(line)
+        if line:
+            records.append(json.loads(line))
+    return records
+
+
+def load_long(results_path: str | Path) -> pd.DataFrame:
+    """Explode results.jsonl into rows of (model, prompt_id, eval, scorer, metric, score, kind).
+
+    Deduped to the most recent run per (model, prompt); rows with a missing score or a
+    scorer error are dropped (they can't enter the stats).
+    """
+    rows = []
+    for record in dedupe_latest(_read_records(results_path), successful_only=True):
         for score in record.get("scores") or []:
             if score.get("score") is None or score.get("error"):
                 continue
@@ -56,7 +64,7 @@ def load_long(results_path: str | Path) -> pd.DataFrame:
                 "score": float(score["score"]),
             })
     if not rows:
-        raise ValueError(f"No numeric scores found in {path}. Nothing to analyze.")
+        raise ValueError(f"No numeric scores found in {results_path}. Nothing to analyze.")
 
     df = pd.DataFrame(rows)
     # Classify each metric by how many distinct values it takes across the run.
@@ -74,18 +82,8 @@ def reliability(results_path: str | Path) -> list[dict]:
     the analysis — so a model that fails prompts is reflected here. Returns
     [{model, n, errors, success_rate}] sorted by success_rate descending.
     """
-    path = Path(results_path)
-    if path.is_dir():
-        path = path / "results.jsonl"
-    if not path.is_file():
-        raise FileNotFoundError(f"Results file not found: {path}")
-
     counts: dict[str, dict[str, int]] = {}
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        record = json.loads(line)
+    for record in dedupe_latest(_read_records(results_path)):
         c = counts.setdefault(record["model_id"], {"n": 0, "errors": 0})
         c["n"] += 1
         if record.get("error"):
@@ -100,18 +98,35 @@ def reliability(results_path: str | Path) -> list[dict]:
 
 
 def metric_pivot(long_df: pd.DataFrame, metric: str) -> pd.DataFrame:
-    """Complete-case (prompt x model) matrix for one metric: prompts scored by ALL models."""
+    """(prompt x model) matrix for one metric; NaN where a model has no score for a prompt.
+
+    Not complete-cased here: callers use each model's/pair's available prompts (skipna) for
+    means and effect sizes, and take the complete-case subset only for the Friedman omnibus.
+    """
     sub = long_df[long_df["metric"] == metric]
-    return sub.pivot_table(index="prompt_id", columns="model", values="score").dropna()
+    return sub.pivot_table(index="prompt_id", columns="model", values="score")
 
 
-def composite_quality(long_df: pd.DataFrame) -> pd.DataFrame | None:
+def aggregate_rows(long_df: pd.DataFrame, exclude: set[str] | None = None) -> pd.DataFrame:
+    """The `quality` rows that feed the aggregate, minus any excluded metrics.
+
+    A metric is excluded if its full label ('<eval> / <scorer>') or its eval name is in
+    `exclude` — so a judge-scored binary metric on a different scale (e.g. an org-refusal
+    guardrail) can be kept out of the composite while still analyzed on its own.
+    """
+    exclude = exclude or set()
+    quality = long_df[long_df["kind"] == "quality"]
+    return quality[~quality["metric"].isin(exclude) & ~quality["eval"].isin(exclude)]
+
+
+def composite_quality(long_df: pd.DataFrame, exclude: set[str] | None = None) -> pd.DataFrame | None:
     """Prompt x model matrix of the quality composite: mean over `quality` metrics.
 
-    Returns None when the run has no quality metrics. Complete-case (prompts scored
-    by all models on every quality metric).
+    Returns None when no quality metrics remain. Not complete-cased (NaN where a model has
+    no composite for a prompt); callers skipna per model/pair, complete-casing only for the
+    Friedman omnibus.
     """
-    quality = long_df[long_df["kind"] == "quality"]
+    quality = aggregate_rows(long_df, exclude)
     if quality.empty:
         return None
-    return quality.groupby(["prompt_id", "model"])["score"].mean().unstack().dropna()
+    return quality.groupby(["prompt_id", "model"])["score"].mean().unstack()

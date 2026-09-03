@@ -20,9 +20,13 @@ from llm_lab.cli.output import warn
 @click.option("--margin", type=float, default=0.2, show_default=True, help="TOST equivalence margin (score points).")
 @click.option("--eval", "eval_filter", multiple=True, help="Restrict to these eval names (repeatable).")
 @click.option("--scorer", "scorer_filter", multiple=True, help="Restrict to these scorer names (repeatable).")
+@click.option("--exclude-metric", "exclude_metrics", multiple=True,
+              help="Keep this metric out of the aggregate/composite (by eval name or '<eval> / <scorer>' "
+                   "label); still analyzed on its own. Repeatable. Use for metrics on a different scale.")
 @click.option("--out-dir", default=None, help="Write analysis.json/.md (+plots) here. Default: alongside RESULTS.")
 @click.option("--plots/--no-plots", default=True, show_default=True, help="Generate matplotlib figures.")
-def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, out_dir, plots):
+@click.option("--verbose/--simple", default=False, help="Full stats vs. headline results only.")
+def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, exclude_metrics, out_dir, plots, verbose):
     """Run mixed-effects + nonparametric tests (where appropriate) on RESULTS.
 
     RESULTS is a run directory or its results.jsonl.
@@ -53,6 +57,8 @@ def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, out_d
             make_plots=plots,
             eval_filter=list(eval_filter) or None,
             scorer_filter=list(scorer_filter) or None,
+            exclude_metrics=list(exclude_metrics) or None,
+            verbose=verbose,
         )
     except (ValueError, FileNotFoundError) as exc:
         raise click.ClickException(str(exc)) from exc

@@ -73,12 +73,16 @@ def _build_rubric(preset: str, interactive: bool) -> dict[str, float]:
     return labels
 
 
-def _build_prompt(variables: list[str]) -> str:
+DEFAULT_INSTRUCTIONS = (
+    "You are an expert evaluator. Judge the OUTPUT against the scoring criteria you are given, "
+    "using only the information below."
+)
+
+
+def _build_prompt(variables: list[str], instructions: str | None = None) -> str:
     blocks = "\n\n".join(f"<{v}>\n{{{v}}}\n</{v}>" for v in variables)
-    return (
-        "You are an expert evaluator. Judge the OUTPUT against the scoring criteria you are given, "
-        "using only the information below.\n\n" + blocks + "\n"
-    )
+    preamble = (instructions or "").strip() or DEFAULT_INSTRUCTIONS
+    return preamble + "\n\n" + blocks + "\n"
 
 
 def _parse_scorers(items: list[str]) -> list[dict[str, Any]]:
@@ -178,10 +182,25 @@ def new(name, eval_dir, description, labels_preset, cli_vars, cli_scorers, force
         )
         raw = click.prompt("Variables (comma-separated)", default="input, output")
         variables = [v.strip() for v in raw.split(",") if v.strip()]
-    prompt = _build_prompt(variables)
+
+    # --- Judge instructions -----------------------------------------------
+    heading("5. Judge instructions")
+    instructions: str | None = None
+    wrote_instructions = False
+    if interactive:
+        teach(
+            "The judge prompt needs instructions telling the judge WHAT to evaluate and how to apply the\n"
+            "rubric. Two options:\n"
+            "  • write a one-line instruction now (the {var} blocks are appended automatically), or\n"
+            "  • skip and edit prompt.md yourself after the files are written — we'll print the path."
+        )
+        if click.confirm("Write the judge instructions now?", default=True):
+            instructions = click.prompt("Judge instructions")
+            wrote_instructions = bool(instructions.strip())
+    prompt = _build_prompt(variables, instructions)
 
     # --- Programmatic scorers (optional) ----------------------------------
-    heading("5. Programmatic checks (optional)")
+    heading("6. Programmatic checks (optional)")
     scorers = _parse_scorers(list(cli_scorers))
     if interactive and not scorers:
         teach(
@@ -197,7 +216,7 @@ def new(name, eval_dir, description, labels_preset, cli_vars, cli_scorers, force
         name=name, description=description, labels=labels, prompt=prompt, scorers=scorers,
     )
     if interactive:
-        heading("6. Preview")
+        heading("7. Preview")
         console.print(Syntax(yaml_text, "yaml", theme="ansi_dark", word_wrap=True))
         console.print()
         info_panel(prompt_text.rstrip(), title=f"{dest}/prompt.md")
@@ -213,7 +232,15 @@ def new(name, eval_dir, description, labels_preset, cli_vars, cli_scorers, force
 
     success(f"Created {dest}/eval.yaml and prompt.md")
     console.print(f"  scale=1-{int(spec.max_label_score)}  vars={list(spec.variables)}  scorers={len(spec.scorers)}")
-    teach(f"Next: edit {dest}/prompt.md to sharpen the wording, then `llm-lab evals validate --dir {eval_dir}`.")
+    prompt_path = dest / "prompt.md"
+    if wrote_instructions:
+        teach(f"Next: refine the wording in {prompt_path}, then `llm-lab evals validate --dir {eval_dir}`.")
+    else:
+        teach(
+            f"You skipped writing instructions — the judge prompt is a placeholder. Write it now at:\n"
+            f"  {prompt_path.resolve()}\n"
+            f"Then run `llm-lab evals validate --dir {eval_dir}`."
+        )
 
 
 @evals.command("validate")

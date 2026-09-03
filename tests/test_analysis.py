@@ -31,6 +31,53 @@ def _write_results(path):
     return path
 
 
+def test_dedupes_to_latest_run(tmp_path):
+    from llm_lab.analysis.frame import load_long, reliability
+
+    lines = [
+        # older run for m1/q0 -> judge 2
+        {"model_id": "mock/m1", "record_id": "q0", "error": None, "timestamp": "2026-01-01T00:00:00",
+         "scores": [{"eval": "E", "scorer": "judge", "score": 2.0, "error": None}]},
+        # newer run for m1/q0 -> judge 5 (should win; not averaged to 3.5, not counted twice)
+        {"model_id": "mock/m1", "record_id": "q0", "error": None, "timestamp": "2026-02-01T00:00:00",
+         "scores": [{"eval": "E", "scorer": "judge", "score": 5.0, "error": None}]},
+        {"model_id": "mock/m2", "record_id": "q0", "error": None, "timestamp": "2026-01-01T00:00:00",
+         "scores": [{"eval": "E", "scorer": "judge", "score": 3.0, "error": None}]},
+    ]
+    path = tmp_path / "results.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in lines) + "\n")
+
+    df = load_long(path)
+    m1q0 = df[(df.model == "mock/m1") & (df.prompt_id == "q0")]
+    assert len(m1q0) == 1 and m1q0.iloc[0]["score"] == 5.0   # latest wins, not mean/dup
+
+    rel = {r["model"]: r for r in reliability(path)}
+    assert rel["mock/m1"]["n"] == 1                          # one unique prompt, not two rows
+
+
+def test_quality_uses_latest_successful_not_latest_overall(tmp_path):
+    from llm_lab.analysis.frame import load_long, reliability
+
+    lines = [
+        # m1/q0: earlier SUCCESS (4.0), then a LATER task FAILURE
+        {"model_id": "mock/m1", "record_id": "q0", "error": None, "timestamp": "2026-01-01T00:00:00",
+         "scores": [{"eval": "E", "scorer": "judge", "score": 4.0, "error": None}]},
+        {"model_id": "mock/m1", "record_id": "q0", "error": "task error: boom",
+         "timestamp": "2026-02-01T00:00:00", "scores": []},
+        {"model_id": "mock/m2", "record_id": "q0", "error": None, "timestamp": "2026-01-01T00:00:00",
+         "scores": [{"eval": "E", "scorer": "judge", "score": 3.0, "error": None}]},
+    ]
+    path = tmp_path / "results.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in lines) + "\n")
+
+    df = load_long(path)
+    m1q0 = df[(df.model == "mock/m1") & (df.prompt_id == "q0")]
+    assert len(m1q0) == 1 and m1q0.iloc[0]["score"] == 4.0   # quality keeps the earlier success
+
+    rel = {r["model"]: r for r in reliability(path)}
+    assert rel["mock/m1"]["n"] == 1 and rel["mock/m1"]["errors"] == 1   # reliability: latest = failure
+
+
 def test_load_long_classifies_metrics(tmp_path):
     from llm_lab.analysis.frame import load_long
 
@@ -53,15 +100,73 @@ def test_run_analysis_reports_all_appropriate_tests(tmp_path):
     assert "friedman" in comp and comp["friedman"]["k"] == 3
     assert comp["mixed_model"]["error"] is None
     assert len(comp["mixed_model"]["effects"]) == 2  # m2, m3 vs reference m1
+    assert comp["mixed_model"].get("summary_text")   # full statsmodels summary captured
     assert comp["cohens_d"] and comp["tost"]
+    assert len(comp["skewness"]) == 3                # skewness per model
+    assert len(comp["bootstrap"]) == 2               # bootstrap CI vs reference
+    assert "overall_means" in report and len(report["overall_means"]) == 3
 
-    # Binary metric: nonparametric only, graded tests skipped with a note.
-    binary = report["metrics"]["E / exact_match"]
-    assert "friedman" in binary
-    assert "mixed_model" not in binary
-    assert any("binary" in n for n in binary["notes"])
+    # Individual metrics are means-only now (full tests run on the aggregate).
+    for per_metric in report["metrics"].values():
+        assert per_metric["means"]
+        assert "friedman" not in per_metric and "mixed_model" not in per_metric
 
     assert (tmp_path / "analysis.json").is_file() and (tmp_path / "analysis.md").is_file()
+
+
+def test_exclude_metric_from_aggregate(tmp_path):
+    import random
+
+    from llm_lab.analysis.report import run_analysis
+
+    random.seed(1)
+    lines = []
+    for model in ("m1", "m2", "m3"):
+        base = {"m1": 4.5, "m2": 3.5, "m3": 2.5}[model]
+        for i in range(8):
+            q = max(1, min(5, round(random.gauss(base, 0.6))))
+            r = max(1, min(5, round(random.gauss(3, 0.6))))
+            lines.append(json.dumps({
+                "model_id": f"mock/{model}", "record_id": f"q{i}", "input": {}, "output": "x",
+                "prompt": "p", "latency_s": 0.1, "usage": {}, "cost_usd": None, "error": None,
+                "scores": [{"eval": "Quality", "scorer": "judge", "score": float(q), "error": None},
+                           {"eval": "Refusal", "scorer": "judge", "score": float(r), "error": None}]}))
+    (tmp_path / "results.jsonl").write_text("\n".join(lines) + "\n")
+
+    rep = run_analysis(tmp_path, reference="mock/m1", make_plots=False, exclude_metrics=["Refusal"])
+    assert rep["excluded_from_aggregate"] == ["Refusal"]
+    comp = rep["composite"]
+    # only Quality remains in the aggregate -> single metric -> no C(metric) term, Refusal absent
+    assert comp["mixed_model"]["formula"] == "score ~ C(model)"
+    assert "Refusal" not in (comp["mixed_model"]["summary_text"] or "")
+
+    # without exclusion, Refusal IS part of the combined model
+    rep2 = run_analysis(tmp_path, reference="mock/m1", make_plots=False)
+    assert "Refusal" in (rep2["composite"]["mixed_model"]["summary_text"] or "")
+
+
+def test_incomplete_coverage_uses_per_model_prompts(tmp_path):
+    from llm_lab.analysis.report import run_analysis
+
+    lines = []
+    for model in ("m1", "m2", "m3"):
+        prompts = range(6) if model != "m3" else range(1, 6)  # m3 is missing q0
+        for i in prompts:
+            base = {"m1": 5, "m2": 4, "m3": 3}[model]
+            score = min(5, base + (i % 2))  # >2 distinct values overall -> quality metric
+            lines.append(json.dumps({
+                "model_id": f"mock/{model}", "record_id": f"q{i}", "error": None,
+                "timestamp": "2026-01-01T00:00:00", "input": {}, "output": "x", "prompt": "p",
+                "latency_s": 0.1, "usage": {}, "cost_usd": None,
+                "scores": [{"eval": "E", "scorer": "judge", "score": float(score), "error": None}]}))
+    (tmp_path / "results.jsonl").write_text("\n".join(lines) + "\n")
+
+    rep = run_analysis(tmp_path, reference="mock/m1", make_plots=False)
+    # Friedman uses complete cases only (q0 excluded because m3 lacks it) -> 5
+    assert rep["composite"]["n_prompts"] == 5
+    # overall means use each model's own prompts (skipna), not the complete-case intersection
+    assert rep["overall_means"]["mock/m1"]["count"] == 6
+    assert rep["overall_means"]["mock/m3"]["count"] == 5
 
 
 def test_analyze_needs_two_models(tmp_path):

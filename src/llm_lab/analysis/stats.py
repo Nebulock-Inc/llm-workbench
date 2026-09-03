@@ -117,6 +117,29 @@ def tost_vs_reference(matrix: pd.DataFrame, reference: str, margin: float, alpha
     return rows
 
 
+def skewness(matrix: pd.DataFrame) -> list[dict]:
+    """Skewness of each model's per-prompt score (negative = left/ceiling skew)."""
+    return [{"model": c, "skew": float(stats.skew(matrix[c].dropna()))} for c in matrix.columns]
+
+
+def bootstrap_ci_vs_reference(matrix: pd.DataFrame, reference: str, *, n_boot: int = 10000,
+                              seed: int = 0) -> list[dict]:
+    """Bootstrap 95% CI of the mean paired difference vs the reference (distribution-free)."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for model in matrix.columns:
+        if model == reference:
+            continue
+        diff = (matrix[model] - matrix[reference]).dropna().to_numpy()
+        if len(diff) == 0:
+            continue
+        boot = np.array([rng.choice(diff, size=len(diff), replace=True).mean() for _ in range(n_boot)])
+        lo, hi = np.percentile(boot, [2.5, 97.5])
+        rows.append({"model": model, "mean_diff": float(diff.mean()),
+                     "ci_low": float(lo), "ci_high": float(hi)})
+    return rows
+
+
 @dataclass
 class MixedModelResult:
     effects: list[dict] = field(default_factory=list)   # per model vs reference

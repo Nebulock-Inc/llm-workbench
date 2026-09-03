@@ -16,6 +16,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from rich.console import Console
 from rich.table import Table
 
@@ -27,64 +28,79 @@ def _short(model: str) -> str:
 
 
 def _means_table(matrix, reference: str, title: str) -> Table:
-    order = matrix.mean().sort_values(ascending=False)
+    order = matrix.mean().sort_values(ascending=False)  # skipna: each model over its own prompts
     table = Table(title=title, title_justify="left", header_style="bold")
     for col in ("model", "mean", "median", "n"):
         table.add_column(col)
     for model, mean in order.items():
+        col = matrix[model].dropna()
         label = _short(model) + ("  (ref)" if model == reference else "")
-        table.add_row(label, f"{mean:.3f}", f"{matrix[model].median():.2f}", str(len(matrix)))
+        table.add_row(label, f"{mean:.3f}", f"{col.median():.2f}", str(len(col)))
     return table
 
 
-def _analyze_matrix(metric, matrix, *, graded, reference, alpha, margin, mixed_long, with_metric):
-    """Run the appropriate tests on one complete-case (prompt x model) matrix."""
+def _analyze_matrix(metric, matrix, *, graded, reference, alpha, margin, mixed_long, with_metric,
+                    show_full_model=False, verbose = False):
+    """Run the appropriate tests on one (prompt x model) matrix.
+
+    Means, skew, Cohen's d, and TOST use each model's / each pair's available prompts
+    (skipna); the Friedman/Wilcoxon omnibus uses the complete-case subset (prompts scored
+    by every model), matching the source analysis.
+    """
     from llm_lab.analysis import stats as S
 
-    n_prompts, k = matrix.shape
-    report: dict[str, Any] = {"metric": metric, "n_prompts": int(n_prompts), "n_models": int(k),
-                              "graded": graded, "means": {m: float(matrix[m].mean()) for m in matrix.columns},
-                              "notes": []}
-    if n_prompts < 2 or k < 2:
-        report["notes"].append("insufficient complete-case data (need >=2 prompts and >=2 models)")
-        _console.print(f"[yellow]{metric}: {report['notes'][-1]}[/yellow]")
-        return report
+    k = matrix.shape[1]
+    complete = matrix.dropna()  # prompts every model scored — for the nonparametric omnibus
+    report: dict[str, Any] = {"metric": metric, "n_prompts": int(complete.shape[0]), "n_models": int(k),
+                            "graded": graded, "means": {m: float(matrix[m].mean()) for m in matrix.columns},
+                            "notes": []}
 
-    _console.print(_means_table(matrix, reference, f"{metric}  —  mean score (complete cases: {n_prompts})"))
+    if verbose:
+        if matrix.shape[0] < 2 or k < 2:
+            report["notes"].append("insufficient data (need >=2 prompts and >=2 models)")
+            _console.print(f"[yellow]{metric}: {report['notes'][-1]}[/yellow]")
+            return report
 
-    # --- Nonparametric -----------------------------------------------------
-    if k >= 3:
-        fr = S.friedman(matrix, alpha=alpha)
-        report["friedman"] = asdict(fr)
-        sig = "SIGNIFICANT" if fr.significant else "not significant"
-        _console.print(f"Friedman: chi2({fr.k - 1})={fr.chi2:.2f}, p={fr.p:.4g}  [{sig} @ alpha={alpha}]"
-                       f"   Kendall's W={fr.w:.3f} ({S.interpret_w(fr.w)})")
-        if fr.significant:
-            pw = S.pairwise_wilcoxon(matrix, alpha=alpha)
+        _console.print(_means_table(matrix, reference, f"{metric}  —  mean score"))
+
+        # --- Nonparametric omnibus (complete-case: prompts scored by every model) ----
+        if complete.shape[0] < 2:
+            report["notes"].append("no complete-case prompts across all models; nonparametric omnibus skipped")
+            _console.print(f"[dim]{report['notes'][-1]}[/dim]")
+        elif k >= 3:
+            fr = S.friedman(complete, alpha=alpha)
+            report["friedman"] = asdict(fr)
+            sig = "SIGNIFICANT" if fr.significant else "not significant"
+            _console.print(f"Friedman: chi2({fr.k - 1})={fr.chi2:.2f}, p={fr.p:.4g}  [{sig} @ alpha={alpha}]"
+                        f"   Kendall's W={fr.w:.3f} ({S.interpret_w(fr.w)})  (n={fr.n} complete cases)")
+            if fr.significant:
+                pw = S.pairwise_wilcoxon(complete, alpha=alpha)
+                report["pairwise_wilcoxon"] = pw
+                for row in pw:
+                    mark = "*" if row["significant"] else " "
+                    rel = (f"{_short(row['higher'])} > {_short(row['lower'])}" if row["significant"]
+                        else f"{_short(row['a'])} vs {_short(row['b'])}")
+                    _console.print(f"  {mark} {rel:40}  raw p={row['raw_p']:.4g}  Holm p={row['holm_p']:.4g}")
+        else:  # exactly 2 models
+            pw = S.pairwise_wilcoxon(complete, alpha=alpha)
             report["pairwise_wilcoxon"] = pw
-            for row in pw:
-                mark = "*" if row["significant"] else " "
-                rel = (f"{_short(row['higher'])} > {_short(row['lower'])}" if row["significant"]
-                       else f"{_short(row['a'])} vs {_short(row['b'])}")
-                _console.print(f"  {mark} {rel:40}  raw p={row['raw_p']:.4g}  Holm p={row['holm_p']:.4g}")
-    else:  # exactly 2 models
-        pw = S.pairwise_wilcoxon(matrix, alpha=alpha)
-        report["pairwise_wilcoxon"] = pw
-        row = pw[0]
-        verdict = "significant" if row["significant"] else "not significant"
-        _console.print(f"Wilcoxon signed-rank: p={row['raw_p']:.4g} [{verdict}]  "
-                       f"(higher: {_short(row['higher'])})")
+            row = pw[0]
+            verdict = "significant" if row["significant"] else "not significant"
+            _console.print(f"Wilcoxon signed-rank: p={row['raw_p']:.4g} [{verdict}]  "
+                        f"(higher: {_short(row['higher'])})")
 
-    if not graded:
-        report["notes"].append("binary/pass metric — mixed model, Cohen's d, and TOST skipped")
-        _console.print(f"[dim]{report['notes'][-1]}[/dim]")
-        return report
+        if not graded:
+            report["notes"].append("binary/pass metric — mixed model, Cohen's d, and TOST skipped")
+            _console.print(f"[dim]{report['notes'][-1]}[/dim]")
+            return report
 
     # --- Mixed-effects model ----------------------------------------------
+   
     if mixed_long is not None:
         mm = S.mixed_model(mixed_long, reference=reference, alpha=alpha, with_metric=with_metric)
         report["mixed_model"] = {"reference": mm.reference, "formula": mm.formula,
-                                 "error": mm.error, "effects": mm.effects}
+                                 "error": mm.error, "effects": mm.effects,
+                                 "summary_text": mm.summary_text}
         if mm.error:
             _console.print(f"[yellow]Mixed model skipped: {mm.error}[/yellow]")
         else:
@@ -97,27 +113,32 @@ def _analyze_matrix(metric, matrix, *, graded, reference, alpha, margin, mixed_l
                                f"[{e['ci_low']:+.2f}, {e['ci_high']:+.2f}]", f"{e['p']:.4g}",
                                "yes" if e["real"] else "no")
             _console.print(mtable)
+            if show_full_model and mm.summary_text and verbose:
+                _console.rule("[bold]Mixed effects hierarchical model — full summary[/bold]")
+                _console.print(mm.summary_text, highlight=False)
+                _console.rule()
 
     # --- Effect sizes + equivalence ---------------------------------------
-    report["cohens_d"] = S.cohens_d_pairwise(matrix)
-    report["tost"] = S.tost_vs_reference(matrix, reference=reference, margin=margin, alpha=alpha)
-    dtable = Table(title="Paired Cohen's d", title_justify="left", header_style="bold")
-    for col in ("pair", "mean diff", "d", "magnitude"):
-        dtable.add_column(col)
-    for row in report["cohens_d"]:
-        dtable.add_row(f"{_short(row['a'])} vs {_short(row['b'])}", f"{row['mean_diff']:+.3f}",
-                       f"{row['cohens_d']:+.2f}", row["magnitude"])
-    _console.print(dtable)
+    if verbose:
+        report["cohens_d"] = S.cohens_d_pairwise(matrix)
+        report["tost"] = S.tost_vs_reference(matrix, reference=reference, margin=margin, alpha=alpha)
+        dtable = Table(title="Paired Cohen's d", title_justify="left", header_style="bold")
+        for col in ("pair", "mean diff", "d", "magnitude"):
+            dtable.add_column(col)
+        for row in report["cohens_d"]:
+            dtable.add_row(f"{_short(row['a'])} vs {_short(row['b'])}", f"{row['mean_diff']:+.3f}",
+                        f"{row['cohens_d']:+.2f}", row["magnitude"])
+        _console.print(dtable)
 
-    ttable = Table(title=f"TOST equivalence vs {_short(reference)} (margin ±{margin})",
-                   title_justify="left", header_style="bold")
-    for col in ("model", "mean diff", "90% CI", "TOST p", "equivalent?"):
-        ttable.add_column(col)
-    for row in report["tost"]:
-        ttable.add_row(_short(row["model"]), f"{row['mean_diff']:+.3f}",
-                       f"[{row['ci_low']:+.2f}, {row['ci_high']:+.2f}]", f"{row['tost_p']:.4g}",
-                       "YES" if row["equivalent"] else "no")
-    _console.print(ttable)
+        ttable = Table(title=f"TOST equivalence vs {_short(reference)} (margin ±{margin})",
+                    title_justify="left", header_style="bold")
+        for col in ("model", "mean diff", "90% CI", "TOST p", "equivalent?"):
+            ttable.add_column(col)
+        for row in report["tost"]:
+            ttable.add_row(_short(row["model"]), f"{row['mean_diff']:+.3f}",
+                        f"[{row['ci_low']:+.2f}, {row['ci_high']:+.2f}]", f"{row['tost_p']:.4g}",
+                        "YES" if row["equivalent"] else "no")
+        _console.print(ttable)
     return report
 
 
@@ -131,8 +152,11 @@ def _reliability_table(rows: list[dict]) -> Table:
 
 
 def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_dir=None,
-                 make_plots=True, eval_filter=None, scorer_filter=None) -> dict:
+                 make_plots=True, eval_filter=None, scorer_filter=None, exclude_metrics=None,
+                 verbose: bool = False) -> dict:
     from llm_lab.analysis import frame
+
+    excluded = set(exclude_metrics or ())
 
     # Reliability first, from the raw results (counts failed rows too), so it shows
     # even when the quality frame is empty because a model failed every prompt.
@@ -163,26 +187,77 @@ def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_di
                    "Tests run only where appropriate for each metric.[/dim]")
 
     report: dict[str, Any] = {"models": models, "reference": reference, "alpha": alpha,
-                              "margin": margin, "reliability": reliability, "metrics": {}, "composite": None}
+                              "margin": margin, "reliability": reliability,
+                              "excluded_from_aggregate": sorted(excluded), "metrics": {}, "composite": None}
+    if excluded:
+        _console.print(f"[dim]Excluded from the aggregate/composite: {', '.join(sorted(excluded))} "
+                       "(still analyzed individually below).[/dim]")
 
-    for metric in sorted(long_df["metric"].unique()):
-        matrix = frame.metric_pivot(long_df, metric)
-        kind = long_df[long_df["metric"] == metric]["kind"].iloc[0]
-        graded = kind in ("quality", "operational")
-        mixed_long = long_df[long_df["metric"] == metric] if graded else None
-        report["metrics"][metric] = _analyze_matrix(
-            metric, matrix, graded=graded, reference=reference, alpha=alpha, margin=margin,
-            mixed_long=mixed_long, with_metric=False)
+    # Overall performance per model over quality metrics (matches calculate_overall_means).
+    quality_rows = frame.aggregate_rows(long_df, excluded)
+    if not quality_rows.empty:
+        om = quality_rows.groupby("model")["score"].agg(["mean", "std", "count"]).sort_values(
+            "mean", ascending=False)
+        report["overall_means"] = {m: {"mean": float(r["mean"]), "std": float(r["std"]),
+                                       "count": int(r["count"])} for m, r in om.iterrows()}
+        otable = Table(title="Overall performance by model (quality metrics)", title_justify="left",
+                       header_style="bold")
+        for col in ("model", "mean", "std", "n"):
+            otable.add_column(col)
+        for m, r in om.iterrows():
+            otable.add_row(_short(m) + ("  (ref)" if m == reference else ""),
+                           f"{r['mean']:.3f}", f"{r['std']:.3f}", str(int(r["count"])))
+        _console.print(otable)
 
-    composite = frame.composite_quality(long_df)
+
+    if verbose:
+        # Per-metric means as ONE table: rows = metric, columns = model (skipna per cell).
+        _console.print("\n[bold]Per-metric mean scores[/bold] [dim](full tests run on the aggregate below)[/dim]")
+        pivot = long_df.groupby(["metric", "model"])["score"].mean().unstack("model")
+        model_order = list(pivot.mean(axis=0).sort_values(ascending=False).index)
+        pmt = Table(title="Mean score by metric × model", title_justify="left", header_style="bold")
+        pmt.add_column("metric")
+        for model in model_order:
+            pmt.add_column(_short(model) + ("*" if model == reference else ""))
+        for metric in sorted(pivot.index):
+            means = {model: (float(v) if pd.notna(v := pivot.loc[metric, model]) else None) for model in model_order}
+            pmt.add_row(metric, *["—" if means[model] is None else f"{means[model]:.2f}" for model in model_order])
+            report["metrics"][metric] = {"metric": metric, "means": means}
+        _console.print(pmt)
+        _console.print("[dim]* = reference model[/dim]")
+
+    composite = frame.composite_quality(long_df, excluded)
     if composite is not None and composite.shape[1] >= 2 and len(composite) >= 2:
-        _console.print("\n[bold cyan]QUALITY COMPOSITE (mean over quality metrics)[/bold cyan]")
+        _console.print("\n[bold cyan]Mixed Effects Model Results[/bold cyan]")
         report["composite"] = _analyze_matrix(
             "quality_composite", composite, graded=True, reference=reference, alpha=alpha, margin=margin,
-            mixed_long=long_df[long_df["kind"] == "quality"], with_metric=True)
+            mixed_long=frame.aggregate_rows(long_df, excluded), with_metric=True, show_full_model=True, 
+            verbose=verbose)
 
-    _console.print("\n[dim]Reminders: a significant p with tiny Kendall's W is real but practically "
-                   "trivial; TOST concludes equivalence, non-significance alone does not.[/dim]")
+
+        if verbose:
+            # Distribution-free robustness check (matches run_nonparametric_check): skewness + bootstrap CI.
+            from llm_lab.analysis import stats as S
+
+            report["composite"]["skewness"] = S.skewness(composite)
+            report["composite"]["bootstrap"] = S.bootstrap_ci_vs_reference(composite, reference)
+            sk = Table(title="Score skewness (negative = ceiling skew)", title_justify="left", header_style="bold")
+            sk.add_column("model")
+            sk.add_column("skew")
+            for row in sorted(report["composite"]["skewness"], key=lambda r: r["skew"]):
+                sk.add_row(_short(row["model"]), f"{row['skew']:+.2f}")
+            _console.print(sk)
+            bt = Table(title=f"Bootstrap 95% CI of mean diff vs {_short(reference)}", title_justify="left",
+                    header_style="bold")
+            for col in ("model", "mean diff", "bootstrap 95% CI"):
+                bt.add_column(col)
+            for row in report["composite"]["bootstrap"]:
+                bt.add_row(_short(row["model"]), f"{row['mean_diff']:+.3f}",
+                        f"[{row['ci_low']:+.3f}, {row['ci_high']:+.3f}]")
+            _console.print(bt)
+
+            _console.print("\n[dim]Reminders: a significant p with tiny Kendall's W is real but practically "
+                        "trivial; TOST concludes equivalence, non-significance alone does not.[/dim]")
 
     if out_dir:
         _write_and_plot(Path(out_dir), report, long_df, make_plots)
@@ -213,9 +288,10 @@ def _write_and_plot(out_dir: Path, report: dict, long_df, make_plots: bool) -> N
                                   out_dir / "composite_effects.png", "Quality difference vs reference")
             if p:
                 made.append(p)
-        comp_matrix = frame.composite_quality(long_df)
+        comp_matrix = frame.composite_quality(long_df, set(report.get("excluded_from_aggregate", [])))
         if comp_matrix is not None:
-            p2 = plots.mean_bar_plot(comp_matrix, out_dir / "composite_means.png", "Quality composite — mean score")
+            p2 = plots.violin_plot(comp_matrix, out_dir / "composite_violin.png",
+                                   "Eval Score Distribution")
             if p2:
                 made.append(p2)
     except Exception as exc:  # a plotting failure must not lose the (already-written) report
@@ -224,38 +300,104 @@ def _write_and_plot(out_dir: Path, report: dict, long_df, make_plots: bool) -> N
         _console.print(f"[green]✓[/green] Wrote {len(made)} plot(s): " + ", ".join(p.name for p in made))
 
 
+def _md_table(headers: list[str], rows: list[list]) -> list[str]:
+    """Render a GitHub markdown table as a list of lines (trailing blank included)."""
+    out = ["| " + " | ".join(headers) + " |",
+           "| " + " | ".join("---" for _ in headers) + " |"]
+    out += ["| " + " | ".join(str(c) for c in row) + " |" for row in rows]
+    out.append("")
+    return out
+
+
 def _markdown(report: dict) -> str:
-    lines = ["# Analysis report", "",
-             f"- Models: {', '.join(report['models'])}",
-             f"- Reference: {report['reference']}",
-             f"- alpha={report['alpha']}, equivalence margin=±{report['margin']}", ""]
+    ref = report["reference"]
+
+    def label(model: str) -> str:
+        return _short(model) + (" (ref)" if model == ref else "")
+
+    # Display models best-first when we have an overall ranking.
+    if report.get("overall_means"):
+        model_order = [m for m, _ in sorted(report["overall_means"].items(), key=lambda kv: -kv[1]["mean"])]
+    else:
+        model_order = list(report["models"])
+
+    lines = ["# LLM Comparison Experiment Report", ""]
+    lines += _md_table(["setting", "value"], [
+        ["models", ", ".join(_short(m) for m in report["models"])],
+        ["reference", _short(ref)],
+        ["alpha", report["alpha"]],
+        ["equivalence margin", f"±{report['margin']}"],
+    ])
+
     if report.get("reliability"):
-        lines.append("## Reliability (task completion)")
-        lines.append("- success rate = fraction of prompts that produced a usable answer "
-                     "(quality metrics below cover only successful prompts)")
-        for r in report["reliability"]:
-            lines.append(f"  - {_short(r['model'])}: {r['success_rate'] * 100:.0f}% "
-                         f"({r['n'] - r['errors']}/{r['n']}, {r['errors']} error(s))")
-        lines.append("")
-    sections = list(report["metrics"].items())
-    if report["composite"]:
-        sections.append(("quality_composite", report["composite"]))
-    for name, m in sections:
-        lines.append(f"## {name}")
-        lines.append(f"- complete-case prompts: {m.get('n_prompts')}, models: {m.get('n_models')}")
-        if m.get("means"):
-            ranked = sorted(m["means"].items(), key=lambda kv: -kv[1])
-            lines.append("- mean score: " + ", ".join(f"{_short(k)}={v:.3f}" for k, v in ranked))
-        if "friedman" in m:
-            fr = m["friedman"]
-            lines.append(f"- Friedman: chi2={fr['chi2']:.2f}, p={fr['p']:.4g}, "
-                         f"W={fr['w']:.3f} ({'sig' if fr['significant'] else 'ns'})")
-        if m.get("mixed_model") and not m["mixed_model"].get("error"):
-            for e in m["mixed_model"]["effects"]:
-                lines.append(f"  - {_short(e['model'])}: {e['coef']:+.3f} "
-                             f"[{e['ci_low']:+.2f},{e['ci_high']:+.2f}] p={e['p']:.4g} "
-                             f"{'(real)' if e['real'] else '(ns)'}")
-        for note in m.get("notes", []):
-            lines.append(f"- note: {note}")
-        lines.append("")
+        lines += ["## Reliability (task completion)",
+                  "_Fraction of prompts that produced a usable answer; quality stats below cover only "
+                  "successful prompts._", ""]
+        lines += _md_table(["model", "success rate", "successful", "errors"],
+                           [[_short(r["model"]), f"{r['success_rate'] * 100:.0f}%",
+                             f"{r['n'] - r['errors']}/{r['n']}", r["errors"]] for r in report["reliability"]])
+
+    if report.get("overall_means"):
+        lines += ["## Summary Performance (quality overview)", ""]
+        lines += _md_table(["model", "mean", "sd", "n"],
+                           [[label(m), f"{s['mean']:.3f}", f"{s['std']:.3f}", s["count"]]
+                            for m, s in sorted(report["overall_means"].items(), key=lambda kv: -kv[1]["mean"])])
+
+    if report.get("metrics"):
+        lines += ["## Mean score by metric × model", ""]
+        rows = []
+        for metric in sorted(report["metrics"]):
+            means = report["metrics"][metric].get("means", {})
+            rows.append([metric] + ["—" if means.get(m) is None else f"{means[m]:.2f}" for m in model_order])
+        lines += _md_table(["metric"] + [label(m) for m in model_order], rows)
+
+    comp = report.get("composite")
+    if comp:
+        lines += ["## Mixed Effects Model", ""]
+        if comp.get("means"):
+            lines += ["**Composite mean score:**", ""]
+            lines += _md_table(["model", "mean"],
+                               [[label(m), f"{v:.3f}"] for m, v in sorted(comp["means"].items(),
+                                                                          key=lambda kv: -kv[1])])
+        if comp.get("friedman"):
+            fr = comp["friedman"]
+            sig = "significant" if fr["significant"] else "not significant"
+            lines += [f"**Friedman:** χ²={fr['chi2']:.2f}, p={fr['p']:.4g}, Kendall's W={fr['w']:.3f} "
+                      f"({sig}, n={fr['n']} complete cases)", ""]
+        mm = comp.get("mixed_model")
+        if mm and mm.get("error"):
+            lines += [f"_Mixed model skipped: {mm['error']}_", ""]
+        elif mm and mm.get("effects"):
+            lines += [f"**Difference vs {_short(ref)}** (random intercept per prompt):", ""]
+            lines += _md_table(["model", "coef", "95% CI", "p", "real?"],
+                               [[_short(e["model"]), f"{e['coef']:+.3f}",
+                                 f"[{e['ci_low']:+.2f}, {e['ci_high']:+.2f}]", f"{e['p']:.4g}",
+                                 "yes" if e["real"] else "no"] for e in mm["effects"]])
+            if mm.get("summary_text"):
+                lines += ["<details><summary>Full mixed-effects model summary</summary>", "",
+                          "```", mm["summary_text"], "```", "</details>", ""]
+        if comp.get("cohens_d"):
+            lines += ["### Paired Cohen's d", ""]
+            lines += _md_table(["pair", "mean diff", "d", "magnitude"],
+                               [[f"{_short(r['a'])} vs {_short(r['b'])}", f"{r['mean_diff']:+.3f}",
+                                 f"{r['cohens_d']:+.2f}", r["magnitude"]] for r in comp["cohens_d"]])
+        if comp.get("tost"):
+            lines += [f"### TOST equivalence vs {_short(ref)} (margin ±{report['margin']})", ""]
+            lines += _md_table(["model", "mean diff", "90% CI", "TOST p", "equivalent?"],
+                               [[_short(r["model"]), f"{r['mean_diff']:+.3f}",
+                                 f"[{r['ci_low']:+.2f}, {r['ci_high']:+.2f}]", f"{r['tost_p']:.4g}",
+                                 "yes" if r["equivalent"] else "no"] for r in comp["tost"]])
+        if comp.get("skewness"):
+            lines += ["### Score skewness (negative = ceiling skew)", ""]
+            lines += _md_table(["model", "skew"],
+                               [[_short(r["model"]), f"{r['skew']:+.2f}"]
+                                for r in sorted(comp["skewness"], key=lambda r: r["skew"])])
+        if comp.get("bootstrap"):
+            lines += [f"### Bootstrap 95% CI of mean diff vs {_short(ref)}", ""]
+            lines += _md_table(["model", "mean diff", "bootstrap 95% CI"],
+                               [[_short(r["model"]), f"{r['mean_diff']:+.3f}",
+                                 f"[{r['ci_low']:+.3f}, {r['ci_high']:+.3f}]"] for r in comp["bootstrap"]])
+        for note in comp.get("notes", []):
+            lines.append(f"> note: {note}")
+
     return "\n".join(lines)
