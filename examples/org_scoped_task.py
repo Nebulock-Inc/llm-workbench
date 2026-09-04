@@ -6,10 +6,11 @@ org scoping into the prompt, calls the model under test, and exposes the resolve
 
 Run it with:
     uv run llm-lab run compare --task examples.org_scoped_task:OrgScopedTask \
-        --dataset pilot.jsonl --model ollama/llama3.1 --eval answer-quality \
-        --judge-model bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0
+        --dataset examples/org_scoped_dataset.jsonl --model ollama/llama3.1 \
+        --eval example-helpfulness --judge-model ollama/llama3.1
 
-Dataset rows look like:
+Dataset rows carry an `input` and the `org_name` this task scopes to (see
+examples/org_scoped_dataset.jsonl):
     {"id": "q1", "input": "Show failed logins in the last day", "org_name": "Acme Corp"}
 """
 

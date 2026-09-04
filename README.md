@@ -43,6 +43,40 @@ uv run llm-lab --help
 
 The workflow follows the sections below: **create evals → run a small pilot → size the study with power analysis → build the full test set → run the comparison → analyze the results.**
 
+# Quickstart (run the shipped example)
+
+The repo ships a tiny, self-contained example — a general-knowledge Q&A dataset
+([`examples/dataset.jsonl`](examples/dataset.jsonl)), a prompt template
+([`examples/prompt.txt`](examples/prompt.txt)), and a judge eval
+([`evals_kit/example-helpfulness`](evals_kit/example-helpfulness)) — so you can see the
+whole loop before wiring up your own task.
+
+**1. Smoke test with zero credentials.** The `mock/echo` provider just echoes the prompt,
+so this needs no API keys — it proves the pipeline runs end to end (no judge, so no scores):
+
+```bash
+uv run llm-lab run compare \
+    --prompt-template examples/prompt.txt --dataset examples/dataset.jsonl \
+    --model mock/echo --eval example-helpfulness --out-dir runs/example
+```
+
+**2. A real local comparison with Ollama.** Pull a couple of local models
+(`ollama pull llama3.1 && ollama pull mistral`), then compare them and use one as the judge
+to actually score answers:
+
+```bash
+uv run llm-lab run compare \
+    --prompt-template examples/prompt.txt --dataset examples/dataset.jsonl \
+    --model ollama/llama3.1 --model ollama/mistral \
+    --eval example-helpfulness --judge-model ollama/llama3.1 --out-dir runs/example
+uv run llm-lab analyze runs/example --reference ollama/llama3.1   # needs the `analysis` extra
+```
+
+Two custom-task examples show the `--task` path on the same shape of data:
+[`examples/my_task.py`](examples/my_task.py) (minimal) and
+[`examples/org_scoped_task.py`](examples/org_scoped_task.py) (injects per-record context and
+exposes derived values to the eval via `aux`).
+
 # Eval Creation
 
 An *eval* is a folder (`eval.yaml` + `prompt.md`) describing how to score a model's output — a scoring **rubric** (an LLM judge picks one level) and/or deterministic **checks**. Evals live in `evals_kit/` by default.

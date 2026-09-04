@@ -1,3 +1,8 @@
-{"id": "q1", "prompt": "What did the LSASS and Credential Store Dumping Hunt (54027d53) find? Which endpoints and users were involved in LSASS access events, registry hive extraction, or NTDS.dit access? Were there any authentication anomalies or lateral movement findings associated with those hosts or users?", "org_id": "organization-live-6e60b6dc-803e-42d5-92e6-3667c85292f0"}
-{"id": "q2", "prompt": "Are there any existing detection rules covering im-code_signing_invalidation or unsigned binary persistence on macOS LaunchAgents/LaunchDaemons? What is the status of detection rule e09fb3b1?", "org_id": "organization-live-61237870-2c4e-4924-b56f-e015f1b796df"}
-{"id": "q3", "prompt": "Do we have any prior findings, detections, or knowledge related to npm mirror abuse, package registry open redirects, registry.npmmirror.com, or phishing pages hosted on npm/CDN infrastructure? What coverage exists for DNS or network connections to npm mirror domains?", "org_id": "organization-live-13427773-60a7-4c9a-8def-e389106bb350"}
+{"id": "q1", "input": "What is the capital of Japan?", "expected": "Tokyo"}
+{"id": "q2", "input": "What is the boiling point of water at sea level, in degrees Celsius?", "expected": "100"}
+{"id": "q3", "input": "Who wrote the play Romeo and Juliet?", "expected": "William Shakespeare"}
+{"id": "q4", "input": "What is the chemical symbol for gold?", "expected": "Au"}
+{"id": "q5", "input": "How many continents are there on Earth?", "expected": "7"}
+{"id": "q6", "input": "What is the largest planet in our solar system?", "expected": "Jupiter"}
+{"id": "q7", "input": "In what year did World War II end?", "expected": "1945"}
+{"id": "q8", "input": "What gas do plants primarily absorb from the atmosphere for photosynthesis?", "expected": "Carbon dioxide"}
