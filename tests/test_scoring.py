@@ -118,9 +118,8 @@ def test_latency_scorer():
     assert op.LatencyScorer(ScorerSpec(type="latency", params={"max_s": 1.0})).score(_ctx(response=resp)).passed is False
 
 
-def test_cost_scorer_missing_metadata_errors():
-    resp = Response(text="x", model_id="m", cost_usd=None)
-    result = op.CostScorer(ScorerSpec(type="cost")).score(_ctx(response=resp))
+def test_latency_scorer_missing_metadata_errors():
+    result = op.LatencyScorer(ScorerSpec(type="latency")).score(_ctx(response=None))
     assert result.error
 
 

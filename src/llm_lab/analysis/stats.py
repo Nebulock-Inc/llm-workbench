@@ -85,18 +85,15 @@ def pairwise_wilcoxon(matrix: pd.DataFrame, alpha: float = 0.05) -> list[dict]:
 
 
 def cohens_d_pairwise(matrix: pd.DataFrame) -> list[dict]:
-    """Paired Cohen's d for every model pair: mean(diff) / SD(diff), with a 95% CI."""
+    """Paired Cohen's d for every model pair: mean(diff) / SD(diff)."""
     cols = list(matrix.columns)
     rows = []
     for a, b in combinations(cols, 2):
         diff = (matrix[a] - matrix[b]).dropna()
         sd = diff.std()
         d = float(diff.mean() / sd) if sd else 0.0
-        n = len(diff)
-        se = sd / np.sqrt(n) if n else float("nan")
         rows.append({"a": a, "b": b, "mean_diff": float(diff.mean()),
-                     "cohens_d": d, "ci_low": float(diff.mean() - 1.96 * se),
-                     "ci_high": float(diff.mean() + 1.96 * se), "magnitude": interpret_d(d)})
+                     "cohens_d": d, "magnitude": interpret_d(d)})
     return rows
 
 

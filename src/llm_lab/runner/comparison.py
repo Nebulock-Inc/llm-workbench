@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 from llm_lab.config import LabConfig
 from llm_lab.datasets.jsonl import append_jsonl, read_jsonl
@@ -54,7 +54,7 @@ def run_comparison(
             except Exception as exc:  # a custom task blew up — record and move on
                 append_jsonl(results_path, RunResult(
                     model_id=model_id, record_id=rid, input=record, output="", prompt=None,
-                    latency_s=0.0, usage={}, cost_usd=None,
+                    latency_s=0.0, usage={},
                     error=f"task error: {type(exc).__name__}: {exc}", scores=[],
                 ).to_dict())
                 if on_event:
@@ -64,7 +64,7 @@ def run_comparison(
             score_rows: list[ScoreRow] = []
             for spec in specs:
                 ctx = ScoreContext(record=record, output=out.output, task_output=out,
-                                   eval_spec=spec, judge_client=judge_client)
+                                   judge_client=judge_client)
                 for scorer in scorers_by_eval[spec.name]:
                     res = scorer.score(ctx)
                     score_rows.append(ScoreRow(eval=spec.name, scorer=res.scorer, score=res.score,
@@ -77,7 +77,6 @@ def run_comparison(
                 latency_s=resp.latency_s if resp else 0.0,
                 usage=({"input_tokens": resp.usage.input_tokens, "output_tokens": resp.usage.output_tokens,
                         "total_tokens": resp.usage.total_tokens} if resp else {}),
-                cost_usd=resp.cost_usd if resp else None,
                 error=resp.error if resp else None,
                 scores=score_rows,
             ).to_dict())

@@ -7,5 +7,4 @@ labels:
   Partially satisfies the criterion.: 3
   Barely satisfies the criterion.: 2
   Does not satisfy the criterion.: 1
-include_explanations: true
 prompt_file: prompt.md

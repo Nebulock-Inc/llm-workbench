@@ -8,7 +8,7 @@ import requests
 
 from llm_lab.models.base import BaseClient
 from llm_lab.object_types import GenerationRequest, Response, Usage
-from dataclasses import replace  
+from dataclasses import replace
 
 if TYPE_CHECKING:
     from llm_lab.config import LabConfig, OllamaConfig
@@ -54,7 +54,7 @@ class OllamaClient(BaseClient):
             ) from exc
         resp.raise_for_status()
 
-           
+
         data = resp.json()
 
         n_in, n_out = data.get("prompt_eval_count"), data.get("eval_count")

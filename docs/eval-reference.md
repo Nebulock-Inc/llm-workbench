@@ -18,7 +18,6 @@ define a judge (`labels` + a prompt) and/or a non-empty `scorers` list.
 | `prompt` | string | `""` | Inline judge prompt template. Use this **or** `prompt_file`, not both. |
 | `prompt_file` | path | `prompt.md` | File holding the judge prompt template (relative to the eval folder). If neither `prompt` nor `prompt_file` is set, a sibling `prompt.md` is used when present. |
 | `direction` | `MAXIMIZE`/`MINIMIZE`/`NONE` | `MAXIMIZE` | Whether higher scores are better — used by the analysis. |
-| `include_explanations` | bool | `true` | Ask the judge for a short reasoning string (stored per score). |
 | `use_structured_output` | bool | `false` | Reserved flag for structured-output judging; the default judge parses `SCORE:`/`REASONING:` text. |
 | `scorers` | list | `[]` | Programmatic / operational scorers (see below). Each entry: `type`, optional `expected_field`, optional `params`. |
 
@@ -50,7 +49,6 @@ mirrors it. `expected_field` names a record field holding the ground truth.
 | `json_schema` | `params.schema` (optional JSON Schema) | `output` parses as JSON (and validates against `schema` if given). |
 | `numeric_tolerance` | `expected_field`; `params.atol`, `params.rtol` | the first number in `output` is within `atol + rtol·|expected|` of the expected value. |
 | `latency` | `params.max_s` (optional) | `score` = call latency in seconds; `passed` = `latency ≤ max_s` when `max_s` is set (needs `TaskOutput.response`). |
-| `cost` | `params.max_usd` (optional) | `score` = call cost in USD; `passed` = `cost ≤ max_usd` when set (needs `TaskOutput.response`). |
 
 ## Examples
 
@@ -66,7 +64,6 @@ labels:
   Partially answers.: 3
   Barely answers.: 2
   Does not answer.: 1
-include_explanations: true
 prompt_file: prompt.md
 ```
 
@@ -91,15 +88,13 @@ scorers:
 Judge **and** operational threshold together:
 
 ```yaml
-name: Quality Under Budget
+name: Quality Under Latency Budget
 direction: MAXIMIZE
 labels: {Good: 1, Bad: 0}
 prompt_file: prompt.md
 scorers:
   - type: latency
     params: {max_s: 8}
-  - type: cost
-    params: {max_usd: 0.02}
 ```
 
 Validate before running:

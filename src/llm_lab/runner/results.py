@@ -45,7 +45,6 @@ class RunResult:
     prompt: str | None
     latency_s: float
     usage: dict[str, Any]
-    cost_usd: float | None
     error: str | None
     scores: list[ScoreRow]
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
@@ -100,7 +99,7 @@ def write_csv(out_dir: str | Path) -> Path:
     rows: list[dict[str, Any]] = []
     for r in dedupe_latest(_read_results(out_dir / "results.jsonl"), successful_only=True):
         base = {"model_id": r["model_id"], "record_id": r["record_id"],
-                "latency_s": r["latency_s"], "cost_usd": r["cost_usd"], "task_error": r["error"]}
+                "latency_s": r["latency_s"]}
         scores = r.get("scores") or []
         if scores:
             for s in scores:
@@ -110,7 +109,7 @@ def write_csv(out_dir: str | Path) -> Path:
             rows.append({**base, "eval": None, "scorer": None, "score": None,
                          "label": None, "passed": None, "score_error": None})
     cols = ["model_id", "record_id", "eval", "scorer", "score", "label", "passed",
-            "latency_s", "cost_usd", "task_error", "score_error"]
+            "latency_s", "score_error"]
     csv_path = out_dir / "results.csv"
     with csv_path.open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=cols)
@@ -158,17 +157,16 @@ def print_summary(out_dir: str | Path) -> None:
         )
     _console.print(table)
 
-    per_model: dict[str, dict[str, float]] = defaultdict(lambda: {"n": 0, "lat": 0.0, "cost": 0.0, "err": 0})
+    per_model: dict[str, dict[str, float]] = defaultdict(lambda: {"n": 0, "lat": 0.0, "err": 0})
     for r in results:
         m = per_model[r["model_id"]]
         m["n"] += 1
         m["lat"] += r["latency_s"] or 0.0
-        m["cost"] += r["cost_usd"] or 0.0
         m["err"] += 1 if r["error"] else 0
     mtable = Table(title="Per-model reliability", title_justify="left", header_style="bold")
-    for col in ("model", "runs", "task errors", "mean latency (s)", "total cost ($)"):
+    for col in ("model", "runs", "task errors", "mean latency (s)"):
         mtable.add_column(col)
     for model, m in sorted(per_model.items()):
         mtable.add_row(model, str(int(m["n"])), str(int(m["err"])),
-                       f'{m["lat"] / m["n"]:.2f}' if m["n"] else "-", f'{m["cost"]:.4f}')
+                       f'{m["lat"] / m["n"]:.2f}' if m["n"] else "-")
     _console.print(mtable)

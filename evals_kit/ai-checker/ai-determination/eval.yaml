@@ -13,5 +13,4 @@ labels:
   "Verdict is plausible but the reasoning is thin or only loosely connected to the results.": 3
   "Verdict is stated but poorly supported, or the reasoning conflicts with parts of the data.": 2
   "Verdict is missing, unsupported, or contradicted by the query results.": 1
-include_explanations: true
 prompt_file: prompt.md

@@ -212,7 +212,7 @@ class ContextGraphQueryTask:
         return TaskOutput(
             output=final_response,
             prompt=scoped_query,
-            response=synth_resp,  # final call, for latency/cost scorers
+            response=synth_resp,  # final call, for the latency scorer
             aux={
                 "queries": scoped_query,
                 "query_results": json.dumps(raw_results, default=str)[:5000],

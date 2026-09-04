@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from llm_lab.models.base import BaseClient
 from llm_lab.object_types import GenerationRequest, Response, Usage
-from dataclasses import replace 
+from dataclasses import replace
 
 if TYPE_CHECKING:
     from llm_lab.config import LabConfig, OpenAICompatConfig

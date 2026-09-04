@@ -1,4 +1,4 @@
-"""The ModelClient contract and a BaseClient that adds timing/usage/cost."""
+"""The ModelClient contract and a BaseClient that adds timing/usage."""
 
 from __future__ import annotations
 

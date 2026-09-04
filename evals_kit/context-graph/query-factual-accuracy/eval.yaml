@@ -13,5 +13,4 @@ labels:
   "One invented claim OR one significant numerical error (e.g., says 5 when query returned 4)": 3
   "Multiple invented facts or multiple numerical inaccuracies": 2
   "Response is mostly fabricated with minimal grounding in query results": 1
-include_explanations: true
 prompt_file: prompt.md

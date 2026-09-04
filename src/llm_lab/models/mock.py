@@ -6,11 +6,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from llm_lab.models.base import BaseClient
 from llm_lab.object_types import GenerationRequest, Usage
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from llm_lab.config import LabConfig

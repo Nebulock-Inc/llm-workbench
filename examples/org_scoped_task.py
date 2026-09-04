@@ -41,6 +41,6 @@ class OrgScopedTask:
         return TaskOutput(
             output=resp.text,
             prompt=prompt,
-            response=resp,            # lets latency/cost scorers read timing metadata
+            response=resp,            # lets the latency scorer read timing metadata
             aux={"org_name": org},    # a rubric prompt can now use {org_name}
         )

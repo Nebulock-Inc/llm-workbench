@@ -69,7 +69,7 @@ uv run llm-lab evals validate             # check every eval in evals_kit/ parse
 **Scoring options** an eval can use:
 - **LLM judge** — a rubric of `label: score` pairs; a judge model reads the prompt and picks one level.
 - **Programmatic checks** — deterministic, no model needed: `exact_match`, `contains`, `regex`, `json_schema`, `numeric_tolerance`.
-- **Operational** — `latency`, `cost` thresholds read from each call's metadata.
+- **Operational** — `latency` thresholds read from each call's metadata.
 
 For the full `eval.yaml` key list, how the judge prompt is filled and scored, and each scorer's parameters, see the [Eval Reference](docs/eval-reference.md). For guidance on *what* evals to create and how to design good rubrics, see the FAQ.
 
@@ -220,7 +220,7 @@ Each run directory (`--out-dir`) holds two data files plus, after `analyze`, the
 | `input` | the full dataset record (all its fields) |
 | `output` | the model's answer that the evals scored |
 | `prompt` | the prompt actually sent (for debugging) |
-| `latency_s`, `usage`, `cost_usd` | timing / token / cost metadata from the model call |
+| `latency_s`, `usage` | timing / token metadata from the model call |
 | `error` | **task-level** error — the row produced no usable output (model failure or a custom task that raised); `null` on success |
 | `scores` | list of per-scorer results: `eval`, `scorer`, `score`, `label`, `passed`, `reasoning`, `error` |
 | `timestamp` | when the row was written |
@@ -231,18 +231,17 @@ Each run directory (`--out-dir`) holds two data files plus, after `analyze`, the
 |---|---|
 | `model_id`, `record_id` | as above |
 | `eval`, `scorer` | which eval and which scorer produced this row |
-| `score` | the numeric score (rubric level, `1.0`/`0.0` for a check, or the measured latency/cost) |
+| `score` | the numeric score (rubric level, `1.0`/`0.0` for a check, or the measured latency) |
 | `label` | the rubric label the judge chose (judge evals only) |
 | `passed` | pass/fail — set by programmatic checks and operational thresholds; **blank for judge rubrics** (they report a graded score, not pass/fail) |
-| `latency_s`, `cost_usd` | per-call metadata |
-| `task_error` | the row's task-level `error` (whole task failed → no scores) |
+| `latency_s` | per-call metadata |
 | `score_error` | one scorer failed while others may have succeeded (e.g. judge couldn't be reached) |
 
-The `task_error` vs `score_error` split tells you *where* a failure happened: `task_error` means generation/execution never produced an output; `score_error` means the output exists but a specific scorer failed.
+The CSV covers only tasks that produced a usable output — task-level failures are dropped here (find them in `results.jsonl`'s `error` field and the end-of-run reliability table). `score_error` surfaces the remaining failure mode: the output exists but a specific scorer failed.
 
 **End-of-run tables** printed to the console:
 - **Comparison summary** — per `(model, eval, scorer)`: `n`, mean score, pass rate, error count. Pass rate is shown only for scorers that emit pass/fail; judge rubrics show a mean score with a blank pass rate.
-- **Per-model reliability** — per model: number of runs, task errors, mean latency, total cost.
+- **Per-model reliability** — per model: number of runs, task errors, mean latency.
 
 **Resume** keys on `(model_id, record_id)` present in `results.jsonl` — including rows that errored. So a re-run with `--resume` (the default) skips already-recorded rows, errors included; to retry failures, fix the cause and either start a fresh `--out-dir` or delete the run directory. Give records stable `id`s so resume lines up across runs.
 
@@ -256,14 +255,28 @@ uv run llm-lab analyze runs/experiment-1 --reference anthropic/claude-sonnet-4-5
 
 It first reports **reliability** — each model's task-completion rate (fraction of prompts that produced a usable answer, computed from every recorded row including failures). This matters because the quality stats below are complete-case: they only cover prompts a model actually answered, so a model that fails often can still post strong quality scores. Read reliability and quality together.
 
-Then, for each metric and an overall quality composite, it reports where appropriate:
+It then shows an overall means table per model and a mean-score table for each individual metric. The full statistical battery runs on a single **quality composite** (the aggregate across quality metrics) — one family of tests on the aggregate, rather than per-metric, to keep the multiple-comparisons story clean. If you want to drill into a single metric, filter with `--eval` / `--scorer` and re-run. On the composite it reports where appropriate:
 
 - **Nonparametric**: Friedman test + Kendall's W (omnibus across ≥3 models), with Holm-corrected pairwise Wilcoxon signed-rank post-hocs.
-- **Mixed-effects model**: `score ~ model` with a random intercept per prompt — each model's difference from the reference, with significance. (Graded metrics only; skipped for binary pass/fail.)
+- **Mixed-effects model**: `score ~ model` with a random intercept per prompt — each model's difference from the reference, with significance. (Graded data only; skipped for binary pass/fail.)
 - **Paired Cohen's d**: practical effect-size magnitude for each model pair.
 - **TOST equivalence**: whether two models are *statistically the same* within a margin (`--margin`) — something significance tests can't tell you.
 
-It prints rich tables with plain-language interpretation and writes `analysis.json`, `analysis.md`, and comparison plots into the run directory. Filter with `--eval` / `--scorer`, and set `--alpha` / `--margin` as needed. By default the console shows the headline results; pass `--verbose` for the full per-metric tests, effect sizes, and the complete mixed-model summary (`--simple` is the default).
+It prints rich tables with plain-language interpretation and writes `analysis.json`, `analysis.md`, and comparison plots (`--out-dir`, default: alongside RESULTS; `--no-plots` to skip the figures).
+
+Options:
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--reference <model_id>` | first model | Baseline for the mixed model / TOST — every other model's difference is measured against it. |
+| `--eval <name>` | all | Restrict to these eval names (repeatable). |
+| `--scorer <name>` | all | Restrict to these scorer names (repeatable). |
+| `--exclude-metric <name>` | none | Keep a metric out of the aggregate/composite (by eval name or `<eval> / <scorer>` label) while still showing it in the per-metric mean table. Repeatable; use for metrics on a different scale. |
+| `--alpha <float>` | `0.05` | Significance level. |
+| `--margin <float>` | `0.2` | TOST equivalence margin, in score points. |
+| `--out-dir <path>` | alongside RESULTS | Where to write `analysis.json`/`.md` and plots. |
+| `--plots` / `--no-plots` | `--plots` | Generate matplotlib figures (needs the `analysis` extra). |
+| `--verbose` / `--simple` | `--simple` | Full stats (per-metric mean tables, effect sizes, complete mixed-model summary) vs. headline composite results only. |
 
 
 

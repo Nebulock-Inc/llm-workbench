@@ -7,5 +7,4 @@ labels:
   A few errors in fact: 3
   Several errors in fact, making a significant impact on output: 2
   Nothing in the response is based in fact: 1
-include_explanations: true
 prompt_file: prompt.md

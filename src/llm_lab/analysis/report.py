@@ -1,12 +1,16 @@
-"""Run the appropriate analyses per metric + quality composite, then render/save.
+"""Render the analysis: reliability, an overall means table, per-metric mean tables,
+and the full statistical battery on the quality composite, then render/save.
 
-Appropriateness gating:
-- Need >=2 models overall and >=2 complete-case prompts for a metric to be analyzed.
+The inferential battery (`_analyze_matrix`) runs on the quality composite only —
+individual metrics get mean tables (and only under `--verbose`). Running the full
+battery once on the aggregate keeps the multiple-comparisons story clean.
+
+Tests inside `_analyze_matrix` (the caller guarantees >=2 models and >=2 prompts):
 - Nonparametric: Friedman + Kendall's W when >=3 models; the single pairwise Wilcoxon
-  when exactly 2. Always applicable to any paired numeric metric.
-- Mixed-effects model, paired Cohen's d, TOST: only for graded metrics (quality/operational,
-  i.e. >2 distinct values) and the quality composite; skipped for binary pass/fail metrics
-  where a linear model / mean-difference effect size is ill-suited.
+  when exactly 2. Skipped when fewer than 2 complete-case prompts remain after dropping
+  NaNs (prompts not scored by every model).
+- Mixed-effects model, paired Cohen's d, TOST: the composite is graded, so these always
+  apply.
 """
 
 from __future__ import annotations
@@ -39,28 +43,23 @@ def _means_table(matrix, reference: str, title: str) -> Table:
     return table
 
 
-def _analyze_matrix(metric, matrix, *, graded, reference, alpha, margin, mixed_long, with_metric,
-                    show_full_model=False, verbose = False):
-    """Run the appropriate tests on one (prompt x model) matrix.
+def _analyze_matrix(matrix, *, reference, alpha, margin, mixed_long, verbose=False):
+    """Run the full statistical battery on the graded quality-composite matrix.
 
-    Means, skew, Cohen's d, and TOST use each model's / each pair's available prompts
-    (skipna); the Friedman/Wilcoxon omnibus uses the complete-case subset (prompts scored
-    by every model), matching the source analysis.
+    Means, Cohen's d, and TOST use each model's / each pair's available prompts (skipna);
+    the Friedman/Wilcoxon omnibus uses the complete-case subset (prompts scored by every
+    model), matching the source analysis. The caller guarantees >=2 models and >=2 prompts.
     """
     from llm_lab.analysis import stats as S
 
+    metric = "quality_composite"
     k = matrix.shape[1]
     complete = matrix.dropna()  # prompts every model scored — for the nonparametric omnibus
     report: dict[str, Any] = {"metric": metric, "n_prompts": int(complete.shape[0]), "n_models": int(k),
-                            "graded": graded, "means": {m: float(matrix[m].mean()) for m in matrix.columns},
+                            "means": {m: float(matrix[m].mean()) for m in matrix.columns},
                             "notes": []}
 
     if verbose:
-        if matrix.shape[0] < 2 or k < 2:
-            report["notes"].append("insufficient data (need >=2 prompts and >=2 models)")
-            _console.print(f"[yellow]{metric}: {report['notes'][-1]}[/yellow]")
-            return report
-
         _console.print(_means_table(matrix, reference, f"{metric}  —  mean score"))
 
         # --- Nonparametric omnibus (complete-case: prompts scored by every model) ----
@@ -89,34 +88,27 @@ def _analyze_matrix(metric, matrix, *, graded, reference, alpha, margin, mixed_l
             _console.print(f"Wilcoxon signed-rank: p={row['raw_p']:.4g} [{verdict}]  "
                         f"(higher: {_short(row['higher'])})")
 
-        if not graded:
-            report["notes"].append("binary/pass metric — mixed model, Cohen's d, and TOST skipped")
-            _console.print(f"[dim]{report['notes'][-1]}[/dim]")
-            return report
-
     # --- Mixed-effects model ----------------------------------------------
-   
-    if mixed_long is not None:
-        mm = S.mixed_model(mixed_long, reference=reference, alpha=alpha, with_metric=with_metric)
-        report["mixed_model"] = {"reference": mm.reference, "formula": mm.formula,
-                                 "error": mm.error, "effects": mm.effects,
-                                 "summary_text": mm.summary_text}
-        if mm.error:
-            _console.print(f"[yellow]Mixed model skipped: {mm.error}[/yellow]")
-        else:
-            mtable = Table(title=f"Mixed model ({mm.formula}) — diff vs {_short(reference)}",
-                           title_justify="left", header_style="bold")
-            for col in ("model", "coef", "95% CI", "p", "real?"):
-                mtable.add_column(col)
-            for e in mm.effects:
-                mtable.add_row(_short(e["model"]), f"{e['coef']:+.3f}",
-                               f"[{e['ci_low']:+.2f}, {e['ci_high']:+.2f}]", f"{e['p']:.4g}",
-                               "yes" if e["real"] else "no")
-            _console.print(mtable)
-            if show_full_model and mm.summary_text and verbose:
-                _console.rule("[bold]Mixed effects hierarchical model — full summary[/bold]")
-                _console.print(mm.summary_text, highlight=False)
-                _console.rule()
+    mm = S.mixed_model(mixed_long, reference=reference, alpha=alpha, with_metric=True)
+    report["mixed_model"] = {"reference": mm.reference, "formula": mm.formula,
+                             "error": mm.error, "effects": mm.effects,
+                             "summary_text": mm.summary_text}
+    if mm.error:
+        _console.print(f"[yellow]Mixed model skipped: {mm.error}[/yellow]")
+    else:
+        mtable = Table(title=f"Mixed model ({mm.formula}) — diff vs {_short(reference)}",
+                       title_justify="left", header_style="bold")
+        for col in ("model", "coef", "95% CI", "p", "real?"):
+            mtable.add_column(col)
+        for e in mm.effects:
+            mtable.add_row(_short(e["model"]), f"{e['coef']:+.3f}",
+                           f"[{e['ci_low']:+.2f}, {e['ci_high']:+.2f}]", f"{e['p']:.4g}",
+                           "yes" if e["real"] else "no")
+        _console.print(mtable)
+        if mm.summary_text and verbose:
+            _console.rule("[bold]Mixed effects hierarchical model — full summary[/bold]")
+            _console.print(mm.summary_text, highlight=False)
+            _console.rule()
 
     # --- Effect sizes + equivalence ---------------------------------------
     if verbose:
@@ -184,7 +176,8 @@ def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_di
                    f"metrics={long_df['metric'].nunique()}  reference={_short(reference)}  "
                    f"alpha={alpha}  margin=±{margin}")
     _console.print("[dim]Design: repeated measures, paired on record. "
-                   "Tests run only where appropriate for each metric.[/dim]")
+                   "The full statistical battery runs on the quality composite; "
+                   "individual metrics get mean tables.[/dim]")
 
     report: dict[str, Any] = {"models": models, "reference": reference, "alpha": alpha,
                               "margin": margin, "reliability": reliability,
@@ -230,9 +223,8 @@ def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_di
     if composite is not None and composite.shape[1] >= 2 and len(composite) >= 2:
         _console.print("\n[bold cyan]Mixed Effects Model Results[/bold cyan]")
         report["composite"] = _analyze_matrix(
-            "quality_composite", composite, graded=True, reference=reference, alpha=alpha, margin=margin,
-            mixed_long=frame.aggregate_rows(long_df, excluded), with_metric=True, show_full_model=True, 
-            verbose=verbose)
+            composite, reference=reference, alpha=alpha, margin=margin,
+            mixed_long=frame.aggregate_rows(long_df, excluded), verbose=verbose)
 
 
         if verbose:
