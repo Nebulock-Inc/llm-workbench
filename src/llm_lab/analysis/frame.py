@@ -15,15 +15,15 @@ import pandas as pd
 from llm_lab.runner.results import dedupe_latest
 
 # Scorer -> metric kind. `quality` = graded rubric (goes into the quality composite
-# and gets the mixed model / Cohen's d / TOST). `operational` = latency/cost (graded
-# but not "quality"). Everything else is treated as binary pass/fail.
+# and gets the mixed model / Cohen's d / TOST). Everything else is treated as binary
+# pass/fail. `OPERATIONAL_SCORERS` are run-time threshold metrics (latency): they are
+# dropped from the statistical analysis entirely by `load_long` — kept only as run-time
+# threshold checks (max_s -> passed) surfaced in results.csv and the run summary.
 QUALITY_SCORERS = {"judge"}
-OPERATIONAL_SCORERS = {"latency", "cost"}
+OPERATIONAL_SCORERS = {"latency"}
 
 
 def metric_kind(scorer: str, n_distinct: int) -> str:
-    if scorer in OPERATIONAL_SCORERS:
-        return "operational"
     if scorer in QUALITY_SCORERS or n_distinct > 2:
         return "quality"
     return "binary"
@@ -48,12 +48,15 @@ def load_long(results_path: str | Path) -> pd.DataFrame:
     """Explode results.jsonl into rows of (model, prompt_id, eval, scorer, metric, score, kind).
 
     Deduped to the most recent run per (model, prompt); rows with a missing score or a
-    scorer error are dropped (they can't enter the stats).
+    scorer error are dropped (they can't enter the stats). Operational scorers (latency)
+    are dropped too — they're run-time threshold metrics, not part of the analysis.
     """
     rows = []
     for record in dedupe_latest(_read_records(results_path), successful_only=True):
         for score in record.get("scores") or []:
             if score.get("score") is None or score.get("error"):
+                continue
+            if score["scorer"] in OPERATIONAL_SCORERS:  # run-time threshold metric, not analyzed
                 continue
             rows.append({
                 "model": record["model_id"],
@@ -97,22 +100,12 @@ def reliability(results_path: str | Path) -> list[dict]:
     return rows
 
 
-def metric_pivot(long_df: pd.DataFrame, metric: str) -> pd.DataFrame:
-    """(prompt x model) matrix for one metric; NaN where a model has no score for a prompt.
-
-    Not complete-cased here: callers use each model's/pair's available prompts (skipna) for
-    means and effect sizes, and take the complete-case subset only for the Friedman omnibus.
-    """
-    sub = long_df[long_df["metric"] == metric]
-    return sub.pivot_table(index="prompt_id", columns="model", values="score")
-
-
 def aggregate_rows(long_df: pd.DataFrame, exclude: set[str] | None = None) -> pd.DataFrame:
     """The `quality` rows that feed the aggregate, minus any excluded metrics.
 
     A metric is excluded if its full label ('<eval> / <scorer>') or its eval name is in
     `exclude` — so a judge-scored binary metric on a different scale (e.g. an org-refusal
-    guardrail) can be kept out of the composite while still analyzed on its own.
+    guardrail) can be kept out of the composite while still shown in the per-metric mean table.
     """
     exclude = exclude or set()
     quality = long_df[long_df["kind"] == "quality"]

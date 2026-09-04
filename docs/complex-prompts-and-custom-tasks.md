@@ -60,7 +60,7 @@ A runnable version lives at [`examples/org_scoped_task.py`](../examples/org_scop
 - **Returns `TaskOutput`** with:
   - `output` (str) — the final answer that the evals score.
   - `prompt` (optional) — the actual prompt sent, saved for debugging.
-  - `response` (optional) — the `Response` from the model call, so `latency` / `cost` scorers have timing metadata.
+  - `response` (optional) — the `Response` from the model call, so the `latency` scorer has timing metadata.
   - `aux` (dict) — any derived values you want your eval prompts to reference.
 
 ## How task output reaches your evals

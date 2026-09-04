@@ -13,5 +13,4 @@ labels:
   "Risk level is plausible but the justification is thin or only loosely tied to the results.": 3
   "Risk level is poorly supported, or noticeably over- or under-states the risk given the data.": 2
   "Risk opinion is missing, unsupported, or contradicted by the query results.": 1
-include_explanations: true
 prompt_file: prompt.md

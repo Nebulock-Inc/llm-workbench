@@ -18,7 +18,7 @@ from llm_lab.evals.template import find_variables
 
 KNOWN_KEYS = {
     "name", "description", "labels", "prompt", "prompt_file",
-    "direction", "include_explanations", "use_structured_output", "scorers",
+    "direction", "use_structured_output", "scorers",
 }
 
 
@@ -48,7 +48,6 @@ class EvalSpec(BaseModel):
     labels: dict[str, float] = Field(default_factory=dict)   # label -> score (judge rubric)
     prompt: str = ""                                         # resolved judge prompt template
     direction: Direction = Direction.MAXIMIZE
-    include_explanations: bool = True
     use_structured_output: bool = False
     scorers: list[ScorerSpec] = Field(default_factory=list)
     variables: tuple[str, ...] = ()                         # {placeholders} in the prompt
@@ -131,7 +130,6 @@ def load_spec(path: str | Path) -> EvalSpec:
             labels={str(k): float(v) for k, v in labels.items()},
             prompt=prompt,
             direction=Direction(direction),
-            include_explanations=bool(raw.get("include_explanations", True)),
             use_structured_output=bool(raw.get("use_structured_output", False)),
             scorers=[ScorerSpec(**s) for s in scorers],
             variables=find_variables(prompt),
@@ -149,7 +147,6 @@ def render_spec_files(
     prompt: str,
     direction: str = "MAXIMIZE",
     scorers: list[dict[str, Any]] | None = None,
-    include_explanations: bool = True,
     use_structured_output: bool = False,
 ) -> tuple[str, str]:
     """Render (eval.yaml text, prompt.md text) without writing anything."""
@@ -159,7 +156,6 @@ def render_spec_files(
     config["direction"] = direction
     if labels:
         config["labels"] = labels
-    config["include_explanations"] = include_explanations
     if use_structured_output:
         config["use_structured_output"] = use_structured_output
     if prompt.strip():
@@ -179,7 +175,6 @@ def write_spec(
     prompt: str,
     direction: str = "MAXIMIZE",
     scorers: list[dict[str, Any]] | None = None,
-    include_explanations: bool = True,
     use_structured_output: bool = False,
     force: bool = False,
 ) -> EvalSpec:
@@ -191,7 +186,7 @@ def write_spec(
 
     yaml_text, prompt_text = render_spec_files(
         name=name, description=description, labels=labels, prompt=prompt, direction=direction,
-        scorers=scorers, include_explanations=include_explanations, use_structured_output=use_structured_output,
+        scorers=scorers, use_structured_output=use_structured_output,
     )
     dest_dir.mkdir(parents=True, exist_ok=True)
     yaml_path.write_text(yaml_text)

@@ -20,7 +20,7 @@ def _write_results(path):
         for i in range(8):
             lines.append(json.dumps({
                 "model_id": f"mock/{model}", "record_id": f"q{i}", "input": {}, "output": "x",
-                "prompt": "p", "latency_s": 0.5, "usage": {}, "cost_usd": None, "error": None,
+                "prompt": "p", "latency_s": 0.5, "usage": {}, "error": None,
                 "scores": [
                     {"eval": "E", "scorer": "judge", "score": float(judge[model][i]), "error": None},
                     {"eval": "E", "scorer": "exact_match", "score": float(passes[model][i]),
@@ -87,6 +87,30 @@ def test_load_long_classifies_metrics(tmp_path):
     assert kinds["E / exact_match"] == "binary"   # 0/1
 
 
+def test_load_long_drops_operational_scorers(tmp_path):
+    """Latency is a run-time threshold metric, not part of the statistical analysis."""
+    import json
+
+    from llm_lab.analysis.frame import load_long
+
+    path = tmp_path / "results.jsonl"
+    lines = []
+    for model in ("m1", "m2"):
+        for i in range(3):
+            lines.append(json.dumps({
+                "model_id": f"mock/{model}", "record_id": f"q{i}", "error": None,
+                "scores": [
+                    {"eval": "E", "scorer": "judge", "score": 4.0, "error": None},
+                    {"eval": "E", "scorer": "latency", "score": 0.42, "error": None},
+                ],
+            }))
+    path.write_text("\n".join(lines) + "\n")
+
+    df = load_long(path)
+    assert "latency" not in set(df["scorer"])     # operational metric excluded
+    assert "E / latency" not in set(df["metric"])
+
+
 def test_run_analysis_verbose_reports_all_tests(tmp_path):
     from llm_lab.analysis.report import run_analysis
 
@@ -145,7 +169,7 @@ def test_exclude_metric_from_aggregate(tmp_path):
             r = max(1, min(5, round(random.gauss(3, 0.6))))
             lines.append(json.dumps({
                 "model_id": f"mock/{model}", "record_id": f"q{i}", "input": {}, "output": "x",
-                "prompt": "p", "latency_s": 0.1, "usage": {}, "cost_usd": None, "error": None,
+                "prompt": "p", "latency_s": 0.1, "usage": {}, "error": None,
                 "scores": [{"eval": "Quality", "scorer": "judge", "score": float(q), "error": None},
                            {"eval": "Refusal", "scorer": "judge", "score": float(r), "error": None}]}))
     (tmp_path / "results.jsonl").write_text("\n".join(lines) + "\n")
@@ -174,7 +198,7 @@ def test_incomplete_coverage_uses_per_model_prompts(tmp_path):
             lines.append(json.dumps({
                 "model_id": f"mock/{model}", "record_id": f"q{i}", "error": None,
                 "timestamp": "2026-01-01T00:00:00", "input": {}, "output": "x", "prompt": "p",
-                "latency_s": 0.1, "usage": {}, "cost_usd": None,
+                "latency_s": 0.1, "usage": {},
                 "scores": [{"eval": "E", "scorer": "judge", "score": float(score), "error": None}]}))
     (tmp_path / "results.jsonl").write_text("\n".join(lines) + "\n")
 
@@ -191,7 +215,7 @@ def test_analyze_needs_two_models(tmp_path):
 
     (tmp_path / "results.jsonl").write_text(json.dumps({
         "model_id": "mock/only", "record_id": "q0", "input": {}, "output": "x", "prompt": "p",
-        "latency_s": 0.1, "usage": {}, "cost_usd": None, "error": None,
+        "latency_s": 0.1, "usage": {}, "error": None,
         "scores": [{"eval": "E", "scorer": "judge", "score": 5.0, "error": None}],
     }) + "\n")
     with pytest.raises(ValueError, match="at least 2 models"):

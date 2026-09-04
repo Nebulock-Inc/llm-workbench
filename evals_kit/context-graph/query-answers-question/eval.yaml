@@ -12,5 +12,4 @@ labels:
   "Answers the core question but misses some nuance or is partially incomplete": 3
   "Provides related information but does not clearly address the specific question": 2
   "Does not answer the question AND does not appropriately refuse": 1
-include_explanations: true
 prompt_file: prompt.md

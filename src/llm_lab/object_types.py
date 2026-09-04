@@ -15,7 +15,6 @@ class GenerationRequest:
     max_tokens: int | None = None
     temperature: float | None = None
     stop: list[str] | None = None
-    extra: dict[str, Any] = field(default_factory=dict)  # provider-specific passthrough
 
 
 @dataclass(slots=True, frozen=True)
@@ -35,6 +34,5 @@ class Response:
     model_id: str                       # canonical "prefix/native"
     usage: Usage = field(default_factory=Usage)
     latency_s: float = 0.0
-    cost_usd: float | None = None
     raw: dict[str, Any] | None = None    # raw provider payload, for debugging
     error: str | None = None             # set on soft failure instead of raising

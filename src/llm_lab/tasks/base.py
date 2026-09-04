@@ -5,11 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from llm_lab.models.base import ModelClient
-from llm_lab.object_types import Response
-
 from llm_lab.evals.template import fill_template
-from llm_lab.object_types import GenerationRequest
+from llm_lab.models.base import ModelClient
+from llm_lab.object_types import GenerationRequest, Response
 
 
 @dataclass
@@ -17,7 +15,7 @@ class TaskOutput:
     output: str                                          # primary text the evals score
     prompt: str | None = None                            # actual prompt sent, for logging
     aux: dict[str, Any] = field(default_factory=dict)    # extra vars for eval templates
-    response: Response | None = None                     # so latency/cost scorers see metadata
+    response: Response | None = None                     # so the latency scorer sees metadata
 
 
 @runtime_checkable

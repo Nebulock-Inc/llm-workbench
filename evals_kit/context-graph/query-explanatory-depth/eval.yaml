@@ -12,5 +12,4 @@ labels:
   "Explains at a basic level, but lacks depth": 3
   "Explains only minimally, with significant gaps": 2
   "Explains no part of the source material": 1
-include_explanations: true
 prompt_file: prompt.md

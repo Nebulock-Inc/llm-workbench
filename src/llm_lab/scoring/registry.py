@@ -19,7 +19,6 @@ SCORER_FACTORIES: dict[str, Callable[["ScorerSpec"], Scorer]] = {
     "json_schema": pr.JSONSchemaValid,
     "numeric_tolerance": pr.NumericTolerance,
     "latency": op.LatencyScorer,
-    "cost": op.CostScorer,
 }
 
 

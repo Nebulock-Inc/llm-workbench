@@ -22,7 +22,8 @@ from llm_lab.cli.output import warn
 @click.option("--scorer", "scorer_filter", multiple=True, help="Restrict to these scorer names (repeatable).")
 @click.option("--exclude-metric", "exclude_metrics", multiple=True,
               help="Keep this metric out of the aggregate/composite (by eval name or '<eval> / <scorer>' "
-                   "label); still analyzed on its own. Repeatable. Use for metrics on a different scale.")
+                   "label); still shown in the per-metric mean table. Repeatable. Use for metrics on a "
+                   "different scale.")
 @click.option("--out-dir", default=None, help="Write analysis.json/.md (+plots) here. Default: alongside RESULTS.")
 @click.option("--plots/--no-plots", default=True, show_default=True, help="Generate matplotlib figures.")
 @click.option("--verbose/--simple", default=False, help="Full stats vs. headline results only.")

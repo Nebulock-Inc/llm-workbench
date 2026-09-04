@@ -118,7 +118,7 @@ def test_summary_and_csv_dedupe_to_latest(tmp_path):
 
     def row(ts, score):
         return json.dumps({"model_id": "mock/m1", "record_id": "q0", "input": {}, "output": "",
-                           "prompt": None, "latency_s": 0.1, "usage": {}, "cost_usd": None,
+                           "prompt": None, "latency_s": 0.1, "usage": {},
                            "error": None, "timestamp": ts,
                            "scores": [{"eval": "E", "scorer": "judge", "score": score, "error": None}]})
 

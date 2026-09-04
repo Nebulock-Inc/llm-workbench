@@ -8,5 +8,4 @@ labels:
   "Partially answers; noticeable gaps or vagueness.": 3
   "Barely addresses the question.": 2
   "Does not answer the question at all.": 1
-include_explanations: true
 prompt_file: prompt.md
