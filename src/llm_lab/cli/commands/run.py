@@ -95,7 +95,10 @@ def compare(task_spec, prompt_template, dataset, model_ids, models_csv, eval_nam
         mark = {"done": "[green]·[/green]", "skip": "[dim]-[/dim]", "error": "[red]![/red]"}.get(kind, "?")
         console.print(f"{mark} {model}  {rid}", highlight=False)
 
-    run_comparison(task=task, dataset_path=dataset, model_ids=models, specs=specs,
-                   judge_model=judge_model, config=LabConfig.from_env(), out_dir=out_dir,
-                   resume=resume, limit=limit, on_event=on_event)
+    try:
+        run_comparison(task=task, dataset_path=dataset, model_ids=models, specs=specs,
+                       judge_model=judge_model, config=LabConfig.from_env(), out_dir=out_dir,
+                       resume=resume, limit=limit, on_event=on_event)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
     success(f"Done. Results in {out_dir}/results.jsonl and results.csv")

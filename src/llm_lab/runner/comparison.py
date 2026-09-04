@@ -38,11 +38,15 @@ def run_comparison(
     ids = [record_id(r, i) for i, r in enumerate(records)]
 
     completed = load_completed(out_dir) if resume else set()
+    # Construct every client up front so a bad model/judge id fails fast with a clear
+    # error before any records run — never mid-sweep after partial work. (Clients build
+    # lazily, so this makes no network calls.)
     judge_client = make_client(judge_model, config) if judge_model else None
+    clients = {model_id: make_client(model_id, config) for model_id in model_ids}
     scorers_by_eval = {s.name: build_scorers(s, include_judge=judge_model is not None) for s in specs}
 
     for model_id in model_ids:
-        client = make_client(model_id, config)
+        client = clients[model_id]
         for record, rid in zip(records, ids):
             if (model_id, rid) in completed:
                 if on_event:

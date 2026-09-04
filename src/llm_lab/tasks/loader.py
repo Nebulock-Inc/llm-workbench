@@ -24,7 +24,19 @@ def load_task(spec: str, **kwargs: Any) -> Task:
     if cwd not in sys.path:
         sys.path.insert(0, cwd)
     module_name, _, attr = spec.partition(":")
-    obj = getattr(importlib.import_module(module_name), attr)
+    try:
+        module = importlib.import_module(module_name)
+    except ImportError as exc:
+        raise ValueError(
+            f"Could not import task module {module_name!r} (from spec {spec!r}): {exc}. "
+            "Make sure it is importable from the current directory."
+        ) from exc
+    try:
+        obj = getattr(module, attr)
+    except AttributeError as exc:
+        raise ValueError(
+            f"Task module {module_name!r} has no attribute {attr!r} (from spec {spec!r})."
+        ) from exc
     if isinstance(obj, type):                      # a class -> instantiate
         return obj(**kwargs) if kwargs else obj()
     if callable(obj) and not hasattr(obj, "run"):  # a factory -> call

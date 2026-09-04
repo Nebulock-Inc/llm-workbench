@@ -6,9 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-
-def _short(model: str) -> str:
-    return model.split("/")[-1]
+from llm_lab.analysis.util import short_model_id as _short
 
 
 def forest_plot(effects: list[dict], reference: str, out_path: Path, title: str) -> Path | None:

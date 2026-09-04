@@ -246,7 +246,8 @@ def new(name, eval_dir, description, labels_preset, cli_vars, cli_scorers, force
 @evals.command("validate")
 @click.argument("path", required=False)
 @click.option("--dir", "eval_dir", default="evals_kit", show_default=True)
-def validate(path, eval_dir):
+@click.pass_context
+def validate(ctx, path, eval_dir):
     """Validate one eval (PATH) or every eval under --dir."""
     if path:
         targets = [Path(path)]
@@ -266,7 +267,7 @@ def validate(path, eval_dir):
             warn(f"✗ {target}: {str(exc).splitlines()[0]}")
     console.print(f"\n[bold]{ok}/{len(targets)} valid[/bold]")
     if ok < len(targets):
-        raise SystemExit(1)
+        ctx.exit(1)
 
 
 @evals.command("list")

@@ -25,6 +25,16 @@ class Usage:
     output_tokens: int | None = None
     total_tokens: int | None = None
 
+    @classmethod
+    def from_in_out(cls, input_tokens: int | None, output_tokens: int | None) -> "Usage":
+        """Build a Usage, deriving `total` as the sum (None when neither is reported).
+
+        For providers that report input/output but not a total; those that report their
+        own total should construct Usage directly.
+        """
+        total = ((input_tokens or 0) + (output_tokens or 0)) or None
+        return cls(input_tokens=input_tokens, output_tokens=output_tokens, total_tokens=total)
+
 
 @dataclass(slots=True, frozen=True)
 class Response:

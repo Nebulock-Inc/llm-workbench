@@ -5,12 +5,14 @@ with the AWS profile at the httpx layer (no Bedrock API key needed).
 
 from __future__ import annotations
 
+import warnings
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import boto3
 
-from llm_lab.models.base import BaseClient
-from llm_lab.object_types import GenerationRequest, Usage
+from llm_lab.models.base import BaseClient, importing
+from llm_lab.object_types import GenerationRequest, Response, Usage
 
 if TYPE_CHECKING:
     from llm_lab.config import AWSConfig, LabConfig
@@ -59,14 +61,9 @@ class MantleClient(BaseClient):
 
     def _client(self) -> Any:
         if self._client_obj is None:
-            try:
+            with importing("openai", extra="openai", used_for="bedrock-mantle/ models"):
                 import httpx
                 from openai import OpenAI
-            except ModuleNotFoundError as exc:
-                raise RuntimeError(
-                    "The 'openai' package is required for bedrock-mantle/ models. "
-                    "Install it with: uv sync --extra openai"
-                ) from exc
             # Mantle serves these models under /openai/v1 (NOT the bare /v1 route).
             base_url = f"https://bedrock-mantle.{self.region}.api.aws/openai/v1"
             http_client = httpx.Client(
@@ -94,6 +91,12 @@ class MantleClient(BaseClient):
             kwargs["instructions"] = request.system
         if request.temperature is not None:
             kwargs["temperature"] = request.temperature
+        if request.stop:
+            warnings.warn(
+                f"bedrock-mantle ({self.native}) cannot honor `stop`: the OpenAI-Responses "
+                "API has no stop-sequence parameter, so it is ignored.",
+                stacklevel=2,
+            )
         return kwargs
 
     def _raw_generate(self, request: GenerationRequest) -> tuple[str, Usage, dict[str, Any] | None]:
@@ -109,4 +112,17 @@ class MantleClient(BaseClient):
             if u
             else Usage()
         )
-        return text, usage, None
+        # Keep the provider payload like the other clients (for debugging + _annotate).
+        raw = resp.model_dump() if hasattr(resp, "model_dump") else None
+        return text, usage, raw
+
+    def _annotate(self, response: Response) -> Response:
+        # The Responses API reports a hit token cap via status="incomplete" +
+        # incomplete_details.reason="max_output_tokens".
+        if response.error or response.text:
+            return response
+        raw = response.raw or {}
+        reason = (raw.get("incomplete_details") or {}).get("reason")
+        if raw.get("status") == "incomplete" and reason in ("max_output_tokens", "max_tokens"):
+            return replace(response, error="truncated before final answer (raise max_tokens)")
+        return response

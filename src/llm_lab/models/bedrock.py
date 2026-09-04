@@ -75,11 +75,7 @@ class BedrockClient(BaseClient):
         data = json.loads(resp["body"].read())
         text = data["content"][0]["text"] if data.get("content") else ""
         u = data.get("usage", {})
-        usage = Usage(
-            input_tokens=u.get("input_tokens"),
-            output_tokens=u.get("output_tokens"),
-            total_tokens=((u.get("input_tokens") or 0) + (u.get("output_tokens") or 0)) or None,
-        )
+        usage = Usage.from_in_out(u.get("input_tokens"), u.get("output_tokens"))
         return text, usage, data
 
     def _converse(self, request: GenerationRequest) -> tuple[str, Usage, dict[str, Any] | None]:

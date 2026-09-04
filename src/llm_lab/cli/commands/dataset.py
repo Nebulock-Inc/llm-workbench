@@ -39,8 +39,8 @@ def generate_cmd(model_id, instructions, num, out, with_expected):
     from llm_lab.datasets.build import generate
     from llm_lab.models.factory import make_client
 
-    client = make_client(model_id, LabConfig.from_env())
     try:
+        client = make_client(model_id, LabConfig.from_env())
         n = generate(client, instructions=instructions, n=num, out_path=out, with_expected=with_expected)
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
