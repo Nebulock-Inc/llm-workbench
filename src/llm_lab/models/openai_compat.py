@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from llm_lab.models.base import BaseClient
+from llm_lab.models.base import BaseClient, importing
 from llm_lab.object_types import GenerationRequest, Response, Usage
 from dataclasses import replace
 
@@ -27,13 +27,8 @@ class OpenAICompatClient(BaseClient):
 
     def _client(self) -> Any:
         if self._client_obj is None:
-            try:
+            with importing("openai", extra="openai", used_for="openai/ and bedrock-mantle/ models"):
                 from openai import OpenAI
-            except ModuleNotFoundError as exc:
-                raise RuntimeError(
-                    "The 'openai' package is required for openai/ and bedrock-mantle/ models. "
-                    "Install it with: uv sync --extra openai"
-                ) from exc
             # api_key is required by the SDK even for keyless local servers.
             self._client_obj = OpenAI(base_url=self.cfg.base_url, api_key=self.cfg.api_key or "not-needed")
         return self._client_obj

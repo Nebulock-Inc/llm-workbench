@@ -92,13 +92,17 @@ def test_bedrock_flags_truncation_across_apis():
 
 
 def test_mantle_forwards_system_and_temperature_but_not_stop():
+    import pytest
+
     from llm_lab.config import LabConfig
     from llm_lab.models.bedrock_mantle import MantleClient
     from llm_lab.object_types import GenerationRequest
 
     client = MantleClient.from_config(model_id="bedrock-mantle/g", native="g", config=LabConfig())
-    kw = client._request_kwargs(GenerationRequest(prompt="hi", system="be terse", temperature=0.2,
-                                                  max_tokens=50, stop=["END"]))
+    # `stop` is unsupported by the Responses API — it must be dropped AND warned about.
+    with pytest.warns(UserWarning, match="cannot honor `stop`"):
+        kw = client._request_kwargs(GenerationRequest(prompt="hi", system="be terse", temperature=0.2,
+                                                      max_tokens=50, stop=["END"]))
     assert kw["instructions"] == "be terse"      # system -> instructions
     assert kw["temperature"] == 0.2
     assert kw["max_output_tokens"] == 50
@@ -107,6 +111,23 @@ def test_mantle_forwards_system_and_temperature_but_not_stop():
     kw2 = client._request_kwargs(GenerationRequest(prompt="hi"))
     assert "instructions" not in kw2 and "temperature" not in kw2
     assert kw2["max_output_tokens"] == client.max_tokens
+
+
+def test_mantle_annotate_flags_truncation():
+    from llm_lab.config import LabConfig
+    from llm_lab.models.bedrock_mantle import MantleClient
+    from llm_lab.object_types import Response
+
+    client = MantleClient.from_config(model_id="bedrock-mantle/g", native="g", config=LabConfig())
+    # Empty output + incomplete-due-to-token-cap -> flagged like the other providers.
+    truncated = Response(text="", model_id="x",
+                         raw={"status": "incomplete", "incomplete_details": {"reason": "max_output_tokens"}})
+    assert client._annotate(truncated).error and "truncated" in client._annotate(truncated).error
+    # A normal completion is left untouched.
+    ok = Response(text="the answer", model_id="x", raw={"status": "completed"})
+    assert client._annotate(ok).error is None
+    # Missing raw (None) must not crash.
+    assert client._annotate(Response(text="", model_id="x")).error is None
 
 
 def test_annotate_hook_runs_after_generate():

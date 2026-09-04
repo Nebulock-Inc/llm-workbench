@@ -58,11 +58,7 @@ class OllamaClient(BaseClient):
         data = resp.json()
 
         n_in, n_out = data.get("prompt_eval_count"), data.get("eval_count")
-        usage = Usage(
-            input_tokens=n_in,
-            output_tokens=n_out,
-            total_tokens=((n_in or 0) + (n_out or 0)) or None,
-        )
+        usage = Usage.from_in_out(n_in, n_out)
         return data["response"], usage, data
 
     def _annotate(self, response: Response) -> Response:

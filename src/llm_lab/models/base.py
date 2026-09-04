@@ -4,9 +4,28 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, Protocol, runtime_checkable
 
 from llm_lab.object_types import GenerationRequest, Response, Usage
+
+
+@contextmanager
+def importing(package: str, *, extra: str, used_for: str) -> Iterator[None]:
+    """Wrap a lazy provider-SDK import, turning a missing package into an actionable error.
+
+    Usage:
+        with importing("openai", extra="openai", used_for="openai/ and bedrock-mantle/ models"):
+            from openai import OpenAI
+    """
+    try:
+        yield
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            f"The '{package}' package is required for {used_for}. "
+            f"Install it with: uv sync --extra {extra}"
+        ) from exc
 
 
 @runtime_checkable

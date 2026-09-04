@@ -24,11 +24,9 @@ import pandas as pd
 from rich.console import Console
 from rich.table import Table
 
+from llm_lab.analysis.util import short_model_id as _short
+
 _console = Console()
-
-
-def _short(model: str) -> str:
-    return model.split("/")[-1]
 
 
 def _means_table(matrix, reference: str, title: str) -> Table:

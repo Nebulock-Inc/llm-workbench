@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import click
 
+from llm_lab.analysis.util import short_model_id
 from llm_lab.cli.output import console, teach
 
 
@@ -43,21 +44,21 @@ def power(effect_size, mean_diff, sd_diff, from_run_path, reference, alpha, targ
         except (ValueError, FileNotFoundError) as exc:
             raise click.ClickException(str(exc)) from exc
 
-        teach(f"Pilot effects on the quality composite vs {result['reference'].split('/')[-1]}. "
+        teach(f"Pilot effects on the quality composite vs {short_model_id(result['reference'])}. "
               f"'N needed' = prompts to reach {int(target_power * 100)}% power at alpha={alpha}.")
         table = Table(title="Required sample size (paired)", title_justify="left", header_style="bold")
         for col in ("model", "observed dz", "mean diff", "pilot N", "power now", "N needed"):
             table.add_column(col)
         for pair in result["pairs"]:
             n_needed = "—" if pair.n_needed is None else str(pair.n_needed)
-            table.add_row(pair.model.split("/")[-1], f"{pair.dz:+.3f}", f"{pair.mean_diff:+.3f}",
+            table.add_row(short_model_id(pair.model), f"{pair.dz:+.3f}", f"{pair.mean_diff:+.3f}",
                           str(pair.n_pilot), f"{pair.power_at_pilot * 100:.0f}%", n_needed)
         console.print(table)
         detectable = [p for p in result["pairs"] if p.n_needed is not None]
         if detectable:
             worst = max(detectable, key=lambda p: p.n_needed)
             console.print(f"\n[bold]Plan for the smallest effect:[/bold] ~{worst.n_needed} prompts "
-                          f"to detect {worst.model.split('/')[-1]} vs reference (dz={worst.dz:+.3f}).")
+                          f"to detect {short_model_id(worst.model)} vs reference (dz={worst.dz:+.3f}).")
         return
 
     dz = effect_size

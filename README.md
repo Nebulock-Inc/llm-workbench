@@ -228,6 +228,18 @@ Every model is referenced by a single id string, `provider/model`. The prefix se
 | `bedrock/` | AWS Bedrock (Claude / Llama / Mistral) | `bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0` | — |
 | `bedrock-mantle/` | Bedrock Mantle OpenAI-Responses (e.g. Gemma) | `bedrock-mantle/google.gemma-4-31b` | `openai` |
 
+**Per-provider request-field support.** A `GenerationRequest` carries `system`, `temperature`, and `stop`; `max_tokens` is honored everywhere. Most providers honor all three, with one exception:
+
+| Prefix | `system` | `temperature` | `stop` |
+|---|---|---|---|
+| `ollama/` | ✅ | ✅ | ✅ |
+| `openai/` | ✅ | ✅ | ✅ |
+| `anthropic/` | ✅ | ✅ | ✅ |
+| `bedrock/` (Claude / Llama / Mistral) | ✅ | ✅ | ✅ |
+| `bedrock-mantle/` | ✅ (→ `instructions`) | ✅ | ❌ — the OpenAI-Responses API has no stop-sequence parameter |
+
+Setting `stop` on a `bedrock-mantle/` model has no effect and emits a warning. (`mock/` is a test stub that echoes the prompt and ignores generation parameters.)
+
 Credentials and endpoints come from the environment (a local `.env` is loaded automatically):
 
 - **Ollama**: `OLLAMA_BASE_URL` (default `http://localhost:11434`), `OLLAMA_THINK=false` to disable reasoning-model thinking, `OLLAMA_KEEP_ALIVE`.
