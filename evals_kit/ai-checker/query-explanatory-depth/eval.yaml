@@ -1,0 +1,16 @@
+# Ported from evals-as-code/evals/query-explanatory-depth for llm_lab.
+# Trace-query metadata stripped (llm_lab EvalSpec forbids those keys).
+# Variables ({query_results}, {output}) come from the task aux + task output.
+name: Query Explanatory Depth
+description: >-
+  Judges whether the response explains its reasoning with adequate detail and
+  specific citations from query results.
+direction: MAXIMIZE
+labels:
+  "Explains pertinent query results, acknowledges limitations, reader understands why this is the answer": 5
+  "Explains well, with minor gaps": 4
+  "Explains at a basic level, but lacks depth": 3
+  "Explains only minimally, with significant gaps": 2
+  "Explains no part of the source material": 1
+include_explanations: true
+prompt_file: prompt.md

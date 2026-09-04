@@ -8,6 +8,7 @@ from llm_lab.cli.commands.dataset import dataset
 from llm_lab.cli.commands.evals import evals
 from llm_lab.cli.commands.models import models
 from llm_lab.cli.commands.power import power
+from llm_lab.cli.commands.review import review
 from llm_lab.cli.commands.run import run
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -21,6 +22,7 @@ cli.add_command(dataset)
 cli.add_command(evals)
 cli.add_command(models)
 cli.add_command(power)
+cli.add_command(review)
 cli.add_command(run)
 
 

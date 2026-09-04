@@ -77,12 +77,27 @@ class MantleClient(BaseClient):
             self._client_obj = OpenAI(base_url=base_url, api_key="sigv4", http_client=http_client)
         return self._client_obj
 
+    def _request_kwargs(self, request: GenerationRequest) -> dict[str, Any]:
+        """Map a GenerationRequest onto the OpenAI Responses API parameters.
+
+        `system` maps to `instructions` (the Responses API's system-prompt slot) and
+        `temperature` is passed through. The Responses API has no stop-sequence parameter,
+        so `request.stop` cannot be honored here (unlike the chat-completions/Converse
+        providers) — it is intentionally not forwarded.
+        """
+        kwargs: dict[str, Any] = {
+            "model": self.native,
+            "input": [{"role": "user", "content": request.prompt}],
+            "max_output_tokens": request.max_tokens or self.max_tokens,
+        }
+        if request.system:
+            kwargs["instructions"] = request.system
+        if request.temperature is not None:
+            kwargs["temperature"] = request.temperature
+        return kwargs
+
     def _raw_generate(self, request: GenerationRequest) -> tuple[str, Usage, dict[str, Any] | None]:
-        resp = self._client().responses.create(
-            model=self.native,
-            input=[{"role": "user", "content": request.prompt}],
-            max_output_tokens=request.max_tokens or self.max_tokens,
-        )
+        resp = self._client().responses.create(**self._request_kwargs(request))
         text = resp.output_text or ""
         u = getattr(resp, "usage", None)
         usage = (

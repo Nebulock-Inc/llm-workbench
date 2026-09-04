@@ -54,7 +54,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # surfaces per-stage progress (query-gen / validation / org-scope / execution /
 # synthesis) and the pipeline's benign actor-resolution notes:
 #   CONTEXT_GRAPH_VERBOSE=1 llm-lab run compare ...
-from context_graph_pipeline import (  # noqa: E402
+from examples.context_graph.context_graph_pipeline import (  # noqa: E402
     GRAPH_SECTION,
     NEPTUNE_BLUE_ENDPOINT,
     ORG_NAMES,

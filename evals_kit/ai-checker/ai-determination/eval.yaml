@@ -1,0 +1,17 @@
+# ai-checker judge eval: is the AI / NOT_AI determination correct and grounded?
+# Judge-only (no ground-truth label). Variables come from the record + task aux:
+#   {input} (event facts), {query_results} (rows the query returned), {output} (the
+#   model's determination, whose first line is `VERDICT: AI|NOT_AI`).
+name: AI Determination Soundness
+description: >-
+  Judges whether the AI-vs-not-AI determination is well-supported by the query results and
+  reasoned correctly, rather than asserted or contradicted by the data.
+direction: MAXIMIZE
+labels:
+  "Verdict is correct given the evidence, and the reasoning cites specific supporting signals from the results.": 5
+  "Verdict is defensible and mostly grounded, with minor reasoning gaps or weak evidence citation.": 4
+  "Verdict is plausible but the reasoning is thin or only loosely connected to the results.": 3
+  "Verdict is stated but poorly supported, or the reasoning conflicts with parts of the data.": 2
+  "Verdict is missing, unsupported, or contradicted by the query results.": 1
+include_explanations: true
+prompt_file: prompt.md
