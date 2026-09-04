@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class OllamaClient(BaseClient):
     def __init__(self, model_id: str, native: str, cfg: "OllamaConfig") -> None:
         super().__init__(model_id)
-        self.model = native
+        self.native = native
         self.cfg = cfg
 
     @classmethod
@@ -25,7 +25,7 @@ class OllamaClient(BaseClient):
         return cls(model_id, native, config.ollama)
 
     def _raw_generate(self, request: GenerationRequest) -> tuple[str, Usage, dict[str, Any] | None]:
-        body: dict[str, Any] = {"model": self.model, "prompt": request.prompt, "stream": False}
+        body: dict[str, Any] = {"model": self.native, "prompt": request.prompt, "stream": False}
         if request.system:
             body["system"] = request.system
         if request.stop:
@@ -49,7 +49,7 @@ class OllamaClient(BaseClient):
             resp = requests.post(f"{self.cfg.base_url}/api/generate", json=body, timeout=timeout)
         except requests.exceptions.Timeout as exc:
             raise TimeoutError(
-                f"Ollama call timed out after {timeout}s (model={self.model}); "
+                f"Ollama call timed out after {timeout}s (model={self.native}); "
                 "the model may be cold-loading or the generation stalled."
             ) from exc
         resp.raise_for_status()

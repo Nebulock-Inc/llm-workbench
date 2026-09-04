@@ -263,7 +263,7 @@ Then, for each metric and an overall quality composite, it reports where appropr
 - **Paired Cohen's d**: practical effect-size magnitude for each model pair.
 - **TOST equivalence**: whether two models are *statistically the same* within a margin (`--margin`) — something significance tests can't tell you.
 
-It prints rich tables with plain-language interpretation and writes `analysis.json`, `analysis.md`, and comparison plots into the run directory. Filter with `--eval` / `--scorer`, and set `--alpha` / `--margin` as needed.
+It prints rich tables with plain-language interpretation and writes `analysis.json`, `analysis.md`, and comparison plots into the run directory. Filter with `--eval` / `--scorer`, and set `--alpha` / `--margin` as needed. By default the console shows the headline results; pass `--verbose` for the full per-metric tests, effect sizes, and the complete mixed-model summary (`--simple` is the default).
 
 
 

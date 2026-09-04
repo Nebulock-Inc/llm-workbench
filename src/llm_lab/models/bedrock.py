@@ -1,16 +1,18 @@
-"""AWS Bedrock via boto3. One client, three request/response shapes selected by
-model family: Anthropic (Messages), Meta Llama (invoke_model), Mistral (Converse).
+"""AWS Bedrock via boto3. Anthropic uses the Messages API (invoke_model); Meta Llama
+and Mistral use the Converse API, which normalizes system prompts, stop sequences, and
+the stop reason across models (and handles each model's chat templating internally).
 """
 
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import boto3
 
 from llm_lab.models.base import BaseClient
-from llm_lab.object_types import GenerationRequest, Usage
+from llm_lab.object_types import GenerationRequest, Response, Usage
 
 if TYPE_CHECKING:
     from llm_lab.config import AWSConfig, LabConfig
@@ -46,9 +48,7 @@ class BedrockClient(BaseClient):
     def _raw_generate(self, request: GenerationRequest) -> tuple[str, Usage, dict[str, Any] | None]:
         if self.kind == "anthropic":
             return self._anthropic(request)
-        if self.kind == "meta":
-            return self._meta(request)
-        return self._mistral(request)
+        return self._converse(request)  # meta + mistral
 
     def _anthropic(self, request: GenerationRequest) -> tuple[str, Usage, dict[str, Any] | None]:
         body: dict[str, Any] = {
@@ -82,31 +82,23 @@ class BedrockClient(BaseClient):
         )
         return text, usage, data
 
-    def _meta(self, request: GenerationRequest) -> tuple[str, Usage, dict[str, Any] | None]:
-        prompt = (
-            "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n"
-            f"{request.prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-        )
-        body: dict[str, Any] = {"prompt": prompt, "max_gen_len": request.max_tokens or self.max_tokens}
-        if request.temperature is not None:
-            body["temperature"] = request.temperature
-        resp = self.client.invoke_model(modelId=self.native, body=json.dumps(body))
-        data = json.loads(resp["body"].read())
-        n_in, n_out = data.get("prompt_token_count"), data.get("generation_token_count")
-        usage = Usage(input_tokens=n_in, output_tokens=n_out, total_tokens=((n_in or 0) + (n_out or 0)) or None)
-        return data.get("generation", ""), usage, data
-
-    def _mistral(self, request: GenerationRequest) -> tuple[str, Usage, dict[str, Any] | None]:
+    def _converse(self, request: GenerationRequest) -> tuple[str, Usage, dict[str, Any] | None]:
+        """Meta Llama and Mistral via the Converse API — one shape for system, stop, and
+        stop reason. Converse applies each model's chat template, so we pass the raw text."""
         inference: dict[str, Any] = {"maxTokens": request.max_tokens or self.max_tokens}
         if request.temperature is not None:
             inference["temperature"] = request.temperature
         if request.stop:
             inference["stopSequences"] = request.stop
-        resp = self.client.converse(
-            modelId=self.native,
-            messages=[{"role": "user", "content": [{"text": request.prompt}]}],
-            inferenceConfig=inference,
-        )
+        kwargs: dict[str, Any] = {
+            "modelId": self.native,
+            "messages": [{"role": "user", "content": [{"text": request.prompt}]}],
+            "inferenceConfig": inference,
+        }
+        if request.system:
+            kwargs["system"] = [{"text": request.system}]
+
+        resp = self.client.converse(**kwargs)
         blocks = resp.get("output", {}).get("message", {}).get("content", [])
         text = blocks[0].get("text", "") if blocks else ""
         u = resp.get("usage", {})
@@ -115,4 +107,14 @@ class BedrockClient(BaseClient):
             output_tokens=u.get("outputTokens"),
             total_tokens=u.get("totalTokens"),
         )
-        return text, usage, None  # converse response isn't JSON-serializable wholesale
+        return text, usage, resp  # keep the converse dict so _annotate can read stopReason
+
+    def _annotate(self, response: Response) -> Response:
+        # Flag output cut off at the token cap. invoke_model (anthropic) reports
+        # `stop_reason`, Converse (meta/mistral) reports `stopReason`; both use "max_tokens".
+        if response.error or response.text:
+            return response
+        raw = response.raw or {}
+        if (raw.get("stop_reason") or raw.get("stopReason")) in ("max_tokens", "length"):
+            return replace(response, error="truncated before final answer (raise max_tokens)")
+        return response

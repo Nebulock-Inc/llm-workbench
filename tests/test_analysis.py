@@ -87,14 +87,14 @@ def test_load_long_classifies_metrics(tmp_path):
     assert kinds["E / exact_match"] == "binary"   # 0/1
 
 
-def test_run_analysis_reports_all_appropriate_tests(tmp_path):
+def test_run_analysis_verbose_reports_all_tests(tmp_path):
     from llm_lab.analysis.report import run_analysis
 
     _write_results(tmp_path / "results.jsonl")
-    report = run_analysis(tmp_path, out_dir=tmp_path, make_plots=False)
+    report = run_analysis(tmp_path, out_dir=tmp_path, make_plots=False, verbose=True)
 
     assert report["reference"] == "mock/m1"  # first alphabetically
-    # Composite (quality) got the full graded treatment.
+    # Composite (quality) got the full graded treatment under --verbose.
     comp = report["composite"]
     assert comp is not None
     assert "friedman" in comp and comp["friedman"]["k"] == 3
@@ -106,12 +106,29 @@ def test_run_analysis_reports_all_appropriate_tests(tmp_path):
     assert len(comp["bootstrap"]) == 2               # bootstrap CI vs reference
     assert "overall_means" in report and len(report["overall_means"]) == 3
 
-    # Individual metrics are means-only now (full tests run on the aggregate).
+    # Individual metrics are means-only (full tests run on the aggregate).
     for per_metric in report["metrics"].values():
         assert per_metric["means"]
         assert "friedman" not in per_metric and "mixed_model" not in per_metric
 
     assert (tmp_path / "analysis.json").is_file() and (tmp_path / "analysis.md").is_file()
+
+
+def test_run_analysis_simple_is_leaner(tmp_path):
+    from llm_lab.analysis.report import run_analysis
+
+    _write_results(tmp_path / "results.jsonl")
+    report = run_analysis(tmp_path, out_dir=tmp_path, make_plots=False)  # verbose=False (default)
+
+    # Headline only: overall means + composite mixed model are kept; the verbose-gated
+    # extras (per-metric table, Friedman, Cohen's d, TOST, skewness, bootstrap) are omitted.
+    assert "overall_means" in report
+    comp = report["composite"]
+    assert comp["mixed_model"]["error"] is None       # mixed model is always computed
+    assert "friedman" not in comp
+    assert "cohens_d" not in comp and "tost" not in comp
+    assert "skewness" not in comp and "bootstrap" not in comp
+    assert report["metrics"] == {}                    # per-metric table is verbose-only
 
 
 def test_exclude_metric_from_aggregate(tmp_path):

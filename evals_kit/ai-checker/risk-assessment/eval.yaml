@@ -1,0 +1,17 @@
+# ai-checker judge eval: is the malicious/suspicious risk opinion sound and grounded?
+# Judge-only (no ground-truth label). Variables come from the record + task aux:
+#   {input} (event facts), {query_results} (rows the query returned), {output} (the
+#   model's determination, whose second line is `RISK: BENIGN|SUSPICIOUS|MALICIOUS`).
+name: Risk Assessment Soundness
+description: >-
+  Judges whether the benign/suspicious/malicious risk opinion is well-calibrated and grounded in
+  the query results, rather than over- or under-stating risk.
+direction: MAXIMIZE
+labels:
+  "Risk level is well-calibrated to the evidence and justified with specific supporting signals from the results.": 5
+  "Risk level is defensible and mostly grounded, with minor calibration or evidence-citation gaps.": 4
+  "Risk level is plausible but the justification is thin or only loosely tied to the results.": 3
+  "Risk level is poorly supported, or noticeably over- or under-states the risk given the data.": 2
+  "Risk opinion is missing, unsupported, or contradicted by the query results.": 1
+include_explanations: true
+prompt_file: prompt.md

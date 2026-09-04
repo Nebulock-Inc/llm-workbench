@@ -20,10 +20,10 @@ class ModelClient(Protocol):
 
 
 class BaseClient(ABC):
-    """Concrete base: wraps `_raw_generate` with timing, usage, and cost.
+    """Concrete base: wraps `_raw_generate` with timing and usage.
 
     Subclasses implement `_raw_generate`, returning the text, a Usage, and the
-    raw provider payload. Timing and (optional) cost are added here so every
+    raw provider payload. Timing is added here so every
     provider reports latency the same way, and exceptions become Response.error.
     """
 
@@ -35,10 +35,6 @@ class BaseClient(ABC):
         self, request: GenerationRequest
     ) -> tuple[str, Usage, dict[str, Any] | None]: ...
 
-    def _estimate_cost(self, usage: Usage) -> float | None:
-        """Best-effort USD cost. Override with a price table; None when unknown."""
-        return None
-
     def generate(self, request: GenerationRequest) -> Response:
         start = time.perf_counter()
         try:
@@ -48,7 +44,6 @@ class BaseClient(ABC):
                 model_id=self.model_id,
                 usage=usage,
                 latency_s=time.perf_counter() - start,
-                cost_usd=self._estimate_cost(usage),
                 raw=raw,
             )
         except Exception as exc:  # soft-fail: one bad call shouldn't kill the sweep
@@ -64,7 +59,6 @@ class BaseClient(ABC):
         """Provider hook to flag soft problems (e.g. truncation) after a Response
         is built. Default: unchanged. Overrides must not raise."""
         return response
-
 
     def call(self, prompt: str) -> str:
         return self.generate(GenerationRequest(prompt=prompt)).text

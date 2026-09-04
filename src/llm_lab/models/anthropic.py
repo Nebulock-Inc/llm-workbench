@@ -4,10 +4,11 @@ rather than Bedrock access.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from llm_lab.models.base import BaseClient
-from llm_lab.object_types import GenerationRequest, Usage
+from llm_lab.object_types import GenerationRequest, Response, Usage
 
 if TYPE_CHECKING:
     from llm_lab.config import AnthropicConfig, LabConfig
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 class AnthropicClient(BaseClient):
     def __init__(self, model_id: str, native: str, cfg: "AnthropicConfig", default_max_tokens: int) -> None:
         super().__init__(model_id)
-        self.model = native
+        self.native = native
         self.cfg = cfg
         self.max_tokens = default_max_tokens
         self._client_obj: Any | None = None
@@ -40,7 +41,7 @@ class AnthropicClient(BaseClient):
 
     def _raw_generate(self, request: GenerationRequest) -> tuple[str, Usage, dict[str, Any] | None]:
         kwargs: dict[str, Any] = {
-            "model": self.model,
+            "model": self.native,
             "max_tokens": request.max_tokens or self.max_tokens,
             "messages": [{"role": "user", "content": request.prompt}],
         }
@@ -60,3 +61,9 @@ class AnthropicClient(BaseClient):
         )
         raw = msg.model_dump() if hasattr(msg, "model_dump") else None
         return text, usage, raw
+
+    def _annotate(self, response: Response) -> Response:
+        # Anthropic signals a hit token cap via stop_reason == "max_tokens".
+        if not response.error and not response.text and (response.raw or {}).get("stop_reason") == "max_tokens":
+            return replace(response, error="truncated before final answer (raise max_tokens)")
+        return response

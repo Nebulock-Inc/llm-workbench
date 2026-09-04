@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class OpenAICompatClient(BaseClient):
     def __init__(self, model_id: str, native: str, cfg: "OpenAICompatConfig") -> None:
         super().__init__(model_id)
-        self.model = native
+        self.native = native
         self.cfg = cfg
         self._client_obj: Any | None = None  # lazily built so `models list` needs no SDK
 
@@ -44,7 +44,7 @@ class OpenAICompatClient(BaseClient):
             messages.append({"role": "system", "content": request.system})
         messages.append({"role": "user", "content": request.prompt})
 
-        kwargs: dict[str, Any] = {"model": self.model, "messages": messages}
+        kwargs: dict[str, Any] = {"model": self.native, "messages": messages}
         if request.max_tokens is not None:
             kwargs["max_tokens"] = request.max_tokens
         if request.temperature is not None:
