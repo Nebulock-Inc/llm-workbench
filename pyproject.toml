@@ -44,9 +44,6 @@ analysis = [
     "scipy>=1.11",
     "statsmodels>=0.14",
 ]
-clickhouse = [
-    "clickhouse-connect>=1.8.0",
-]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
