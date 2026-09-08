@@ -26,8 +26,13 @@ from llm_lab.cli.output import warn
                    "different scale.")
 @click.option("--out-dir", default=None, help="Write analysis.json/.md (+plots) here. Default: alongside RESULTS.")
 @click.option("--plots/--no-plots", default=True, show_default=True, help="Generate matplotlib figures.")
+@click.option("--standardize/--raw", default=False, show_default=True,
+              help="Pool ALL metrics (graded + binary accuracy) into the composite by z-scoring each "
+                   "metric to a common SD scale, rather than averaging only the graded metrics on their "
+                   "raw scale. Effects/Cohen's d/TOST margin are then in SD units.")
 @click.option("--verbose/--simple", default=False, help="Full stats vs. headline results only.")
-def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, exclude_metrics, out_dir, plots, verbose):
+def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, exclude_metrics, out_dir,
+            plots, standardize, verbose):
     """Run mixed-effects + nonparametric tests (where appropriate) on RESULTS.
 
     RESULTS is a run directory or its results.jsonl.
@@ -59,6 +64,7 @@ def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, exclu
             eval_filter=list(eval_filter) or None,
             scorer_filter=list(scorer_filter) or None,
             exclude_metrics=list(exclude_metrics) or None,
+            standardize=standardize,
             verbose=verbose,
         )
     except (ValueError, FileNotFoundError) as exc:
