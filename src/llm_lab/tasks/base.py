@@ -24,6 +24,15 @@ class Task(Protocol):
 
     def run(self, record: dict[str, Any], client: ModelClient) -> TaskOutput: ...
 
+    # Optional hook (duck-typed; not required by the Protocol): if a task defines
+    #   def review_context(self, decision: dict[str, Any]) -> str | None
+    # then `llm-lab review --task module:Class` calls it per decision and renders the
+    # returned text as an extra panel. Use it to surface context that is deliberately
+    # NOT persisted to results.jsonl — e.g. re-running a query live so a human reviewer
+    # can see its results without customer data ever touching disk. Return None to show
+    # nothing. `decision` carries at least: model_id, record_id, eval, input (the record),
+    # output (model answer), prompt (the prompt/SQL sent), and the judge_* fields.
+
 
 class PromptTemplateTask:
     """Default task: fill a {placeholder} template from each record, call the model,

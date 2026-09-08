@@ -45,7 +45,7 @@ def _print_stats(reviews: list[dict]) -> None:
     teach("bias = mean judge − mean human (positive = judge scores higher than you).")
 
 
-def _render(d: dict, idx: int, total: int, *, full: bool) -> None:
+def _render(d: dict, idx: int, total: int, *, full: bool, review_context=None) -> None:
     rec = d.get("input") or {}
     ev, model = d.get("eval"), d.get("model_id")
     heading(f"[{idx}/{total}]  {ev}   ·   {model}   ·   record {d.get('record_id')}")
@@ -60,6 +60,19 @@ def _render(d: dict, idx: int, total: int, *, full: bool) -> None:
 
     sql = d.get("prompt") or "(no query recorded)"
     console.print(Panel(sql, title="query run", title_align="left", border_style="blue"))
+
+    # Optional task-supplied live context (e.g. re-running the query to show its results),
+    # never persisted to disk. Failures here must not break the review loop.
+    if review_context is not None:
+        try:
+            extra = review_context(d)
+        except Exception as exc:  # noqa: BLE001 — surface, never crash the reviewer
+            extra = f"(could not build live context: {exc})"
+        if extra:
+            console.print(Panel(
+                str(extra), title="live context · not persisted",
+                title_align="left", border_style="yellow",
+            ))
 
     out = d.get("output") or ""
     if not full and len(out) > 1800:
@@ -82,10 +95,13 @@ _HELP = "enter a number = your score · [a]gree with judge · [s]kip · [o] full
 @click.option("--model", "model_filter", multiple=True, help="Restrict to these model ids (repeatable).")
 @click.option("--scorer", "scorer_filter", multiple=True, default=("judge",), show_default=True,
               help="Which scorer's decisions to review (repeatable).")
+@click.option("--task", "task_spec", default=None,
+              help="Task 'module:Class' whose optional review_context() supplies live, "
+                   "non-persisted context (e.g. re-running a query to show its results).")
 @click.option("--review-file", default=None, help="Where reviews are stored. Default: <run>/review.jsonl.")
 @click.option("--re-review", is_flag=True, help="Include decisions already reviewed (default skips them).")
 @click.option("--stats", "stats_only", is_flag=True, help="Just print calibration stats; no interactive review.")
-def review(results, eval_filter, model_filter, scorer_filter, review_file, re_review, stats_only):
+def review(results, eval_filter, model_filter, scorer_filter, task_spec, review_file, re_review, stats_only):
     """Review a run's judge decisions and calibrate them to your judgment.
 
     RESULTS is a run directory or its results.jsonl.
@@ -93,6 +109,21 @@ def review(results, eval_filter, model_filter, scorer_filter, review_file, re_re
     results_path = Path(results)
     run_dir = results_path if results_path.is_dir() else results_path.parent
     review_path = Path(review_file) if review_file else run_dir / "review.jsonl"
+
+    review_context = None
+    if task_spec:
+        # Load .env the same way the run path does (LabConfig.from_env), so a task's
+        # review_context() hook sees any credentials it needs (e.g. DB connection).
+        from dotenv import find_dotenv, load_dotenv
+        env_file = find_dotenv(usecwd=True)
+        if env_file:
+            load_dotenv(env_file)
+        from llm_lab.tasks.loader import load_task
+        task = load_task(task_spec)
+        review_context = getattr(task, "review_context", None)
+        if not callable(review_context):
+            warn(f"Task {task_spec} has no review_context() hook; no live context will be shown.")
+            review_context = None
 
     existing = load_reviews(review_path)
 
@@ -123,7 +154,7 @@ def review(results, eval_filter, model_filter, scorer_filter, review_file, re_re
     i = 0
     while i < len(pending):
         d = pending[i]
-        _render(d, i + 1, len(pending), full=full)
+        _render(d, i + 1, len(pending), full=full, review_context=review_context)
         raw = click.prompt("your score", default="s", show_default=False).strip().lower()
 
         if raw == "q":

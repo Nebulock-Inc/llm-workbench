@@ -18,7 +18,7 @@ from llm_lab.evals.template import find_variables
 
 KNOWN_KEYS = {
     "name", "description", "labels", "prompt", "prompt_file",
-    "direction", "use_structured_output", "scorers",
+    "direction", "use_structured_output", "scorers", "ground_truth",
 }
 
 
@@ -40,6 +40,25 @@ class ScorerSpec(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+class GroundTruthSpec(BaseModel):
+    """Per-record ground-truth override for a judge eval. When a record supplies
+    `expected_field`, the judge is bypassed and the criterion is scored deterministically
+    against that gold value; otherwise the LLM judge runs as usual."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    expected_field: str                             # record key holding the gold value
+    aux_field: str | None = None                    # task-aux key with the parsed answer to
+                                                    # compare (categorical). If omitted, the
+                                                    # gold value is used as a direct numeric score.
+    map: dict[str, str] = Field(default_factory=dict)  # canonicalization applied (case-insensitively)
+                                                    # to BOTH the aux value and the gold before
+                                                    # comparing, e.g. {MALICIOUS: SUSPICIOUS} to
+                                                    # score a 3-level answer against a binary label.
+    correct_score: float | None = None             # score on a match (default: 1.0 -> accuracy)
+    incorrect_score: float | None = None            # score on a mismatch (default: 0.0 -> accuracy)
+
+
 class EvalSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -50,6 +69,7 @@ class EvalSpec(BaseModel):
     direction: Direction = Direction.MAXIMIZE
     use_structured_output: bool = False
     scorers: list[ScorerSpec] = Field(default_factory=list)
+    ground_truth: GroundTruthSpec | None = None             # per-record override of the judge
     variables: tuple[str, ...] = ()                         # {placeholders} in the prompt
     source_dir: Path | None = None
 
@@ -60,6 +80,10 @@ class EvalSpec(BaseModel):
     @property
     def max_label_score(self) -> float:
         return max(self.labels.values()) if self.labels else 0.0
+
+    @property
+    def min_label_score(self) -> float:
+        return min(self.labels.values()) if self.labels else 0.0
 
 
 def load_spec(path: str | Path) -> EvalSpec:
@@ -119,6 +143,22 @@ def load_spec(path: str | Path) -> EvalSpec:
     if "{}" in prompt:
         raise EvalSpecError(f"{path}: the prompt contains a literal '{{}}' — reword so no bare braces remain.")
 
+    ground_truth_raw = raw.get("ground_truth")
+    if ground_truth_raw is not None:
+        if not isinstance(ground_truth_raw, dict):
+            raise EvalSpecError(f"{path}: 'ground_truth' must be a mapping.")
+        if not has_judge:
+            raise EvalSpecError(
+                f"{path}: 'ground_truth' overrides the judge per record, so it needs a judge "
+                "rubric to fall back to (add labels + prompt/prompt.md)."
+            )
+        try:
+            ground_truth = GroundTruthSpec(**ground_truth_raw)
+        except ValidationError as exc:
+            raise EvalSpecError(f"{path}: invalid 'ground_truth': {exc}") from exc
+    else:
+        ground_truth = None
+
     direction = str(raw.get("direction", "MAXIMIZE")).upper()
     if direction not in Direction.__members__:
         raise EvalSpecError(f"{path}: 'direction' must be one of {', '.join(Direction.__members__)}; got {direction!r}.")
@@ -132,6 +172,7 @@ def load_spec(path: str | Path) -> EvalSpec:
             direction=Direction(direction),
             use_structured_output=bool(raw.get("use_structured_output", False)),
             scorers=[ScorerSpec(**s) for s in scorers],
+            ground_truth=ground_truth,
             variables=find_variables(prompt),
             source_dir=path.parent,
         )
