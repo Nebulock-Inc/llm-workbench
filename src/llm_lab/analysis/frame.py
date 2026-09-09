@@ -117,17 +117,22 @@ def _zscore_per_metric(df: pd.DataFrame) -> pd.DataFrame:
 
     Standardizing each metric to mean 0 / SD 1 makes metrics on different scales (e.g. a
     1-5 rubric and a 0/1 accuracy) comparable and equally weighted, so they can be pooled
-    into one composite / mixed model. A metric with no variance (every row equal) carries
-    no signal to distinguish models and is set to 0 — it neither helps nor hurts the pool.
+    into one composite / mixed model.
+
+    Zero-variance metrics (every row equal across the run — e.g. all models pass a
+    guardrail) are DROPPED, not zeroed. They carry no signal to distinguish models, so
+    keeping them as 0 rows would dilute the composite toward 0, skew per-model/per-prompt
+    weighting when metric coverage differs, and add dead levels to the mixed model. Absence
+    of signal is not evidence of a zero model effect.
     """
-    out = df.copy()
-
-    def _z(s: pd.Series) -> pd.Series:
-        sd = s.std(ddof=0)
-        return (s - s.mean()) / sd if sd > 0 else s * 0.0
-
-    out["score"] = out.groupby("metric")["score"].transform(_z)
-    return out
+    sd = df.groupby("metric")["score"].transform(lambda s: s.std(ddof=0))
+    informative = df[sd > 0].copy()
+    if informative.empty:
+        return informative
+    informative["score"] = informative.groupby("metric")["score"].transform(
+        lambda s: (s - s.mean()) / s.std(ddof=0)
+    )
+    return informative
 
 
 def pooled_rows(long_df: pd.DataFrame, exclude: set[str] | None = None, *,
@@ -138,8 +143,9 @@ def pooled_rows(long_df: pd.DataFrame, exclude: set[str] | None = None, *,
     minus excludes. With `standardize=True`: ALL metrics (graded quality AND binary
     accuracy metrics like the ground-truth checks), each z-scored within metric, so
     different scales are pooled on a common unit-variance scale — the composite and the
-    mixed-model coefficients are then in SD units. Operational metrics (latency) are
-    already dropped upstream by `load_long`.
+    mixed-model coefficients are then in SD units. Zero-variance metrics are dropped (see
+    `_zscore_per_metric`). Operational metrics (latency) are already dropped upstream by
+    `load_long`.
     """
     exclude = exclude or set()
     if not standardize:
