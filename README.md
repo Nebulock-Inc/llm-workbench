@@ -77,6 +77,11 @@ Two custom-task examples show the `--task` path on the same shape of data:
 [`examples/org_scoped_task.py`](examples/org_scoped_task.py) (injects per-record context and
 exposes derived values to the eval via `aux`).
 
+A built-in task, `--task llm_lab.tasks:ReplayTask`, scores an answer already stored in the
+record instead of calling the model under test — for calibrating the judges, regression-testing
+a rubric or judge-model change, or re-scoring a past run. See
+[Replaying stored outputs](docs/complex-prompts-and-custom-tasks.md#replaying-stored-outputs-judge-calibration--re-scoring).
+
 # Eval Creation
 
 An *eval* is a folder (`eval.yaml` + `prompt.md`) describing how to score a model's output — a scoring **rubric** (an LLM judge picks one level) and/or deterministic **checks**. Evals live in `evals_kit/` by default.
