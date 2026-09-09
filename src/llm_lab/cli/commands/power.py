@@ -15,15 +15,29 @@ from llm_lab.cli.output import console, teach
 @click.option("--from-run", "from_run_path", type=click.Path(exists=True), default=None,
               help="Estimate N from a pilot run directory / results.jsonl.")
 @click.option("--reference", default=None, help="Baseline model (default: first) when using --from-run.")
+@click.option("--eval", "eval_filter", multiple=True,
+              help="With --from-run: size N on these eval names only (repeatable).")
+@click.option("--scorer", "scorer_filter", multiple=True,
+              help="With --from-run: size N on these scorers only, e.g. 'ground_truth' for the "
+                   "AI/Maliciousness accuracy track (repeatable). Binary metrics need --standardize.")
+@click.option("--standardize/--raw", default=False, show_default=True,
+              help="With --from-run: pool the selected metrics (incl. binary accuracy metrics like "
+                   "ground_truth) by z-scoring each to a common SD scale, rather than averaging only "
+                   "graded metrics on their raw scale. dz / N are then in SD units.")
 @click.option("--alpha", type=float, default=0.05, show_default=True)
 @click.option("--power", "target_power", type=float, default=0.8, show_default=True)
 @click.option("--alternative", type=click.Choice(["two-sided", "larger", "smaller"]),
               default="two-sided", show_default=True)
-def power(effect_size, mean_diff, sd_diff, from_run_path, reference, alpha, target_power, alternative):
+def power(effect_size, mean_diff, sd_diff, from_run_path, reference, eval_filter, scorer_filter,
+          standardize, alpha, target_power, alternative):
     """Estimate the number of prompts needed to detect a difference between models.
 
     Provide a target --effect-size (or --mean-diff + --sd-diff), or --from-run to size
     the full study from a small pilot run's observed effects.
+
+    --from-run sizes on the graded quality composite by default. To size on the
+    ground-truth accuracy track instead (e.g. when the judged metrics are saturated), add
+    --scorer ground_truth --standardize.
     """
     try:
         import statsmodels  # noqa: F401
@@ -40,11 +54,19 @@ def power(effect_size, mean_diff, sd_diff, from_run_path, reference, alpha, targ
 
         try:
             result = P.from_run(from_run_path, reference=reference, alpha=alpha,
-                                power=target_power, alternative=alternative)
+                                power=target_power, alternative=alternative,
+                                standardize=standardize, evals=set(eval_filter),
+                                scorers=set(scorer_filter))
         except (ValueError, FileNotFoundError) as exc:
             raise click.ClickException(str(exc)) from exc
 
-        teach(f"Pilot effects on the quality composite vs {short_model_id(result['reference'])}. "
+        if eval_filter or scorer_filter:
+            scope = "selected metrics: " + ", ".join(result["metrics"])
+        elif standardize:
+            scope = "standardized composite (all metrics pooled)"
+        else:
+            scope = "quality composite"
+        teach(f"Pilot effects on the {scope} vs {short_model_id(result['reference'])}. "
               f"'N needed' = prompts to reach {int(target_power * 100)}% power at alpha={alpha}.")
         table = Table(title="Required sample size (paired)", title_justify="left", header_style="bold")
         for col in ("model", "observed dz", "mean diff", "pilot N", "power now", "N needed"):

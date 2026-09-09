@@ -266,3 +266,34 @@ def test_cli_power(tmp_path):
 
     result = CliRunner().invoke(cli, ["power", "--effect-size", "0.5"])
     assert result.exit_code == 0 and "34 prompts" in result.output
+
+
+def test_power_from_run_default_uses_graded_quality(tmp_path):
+    from llm_lab.analysis import power as P
+    res = P.from_run(_write_results(tmp_path / "results.jsonl"))
+    assert res["standardize"] is False
+    assert res["metrics"] == ["E / judge"]          # binary metric excluded by default
+    assert {p.model for p in res["pairs"]} == {"mock/m2", "mock/m3"}
+
+
+def test_power_from_run_binary_scorer_without_standardize_errors(tmp_path):
+    from llm_lab.analysis import power as P
+    with pytest.raises(ValueError, match="standardize"):
+        P.from_run(_write_results(tmp_path / "results.jsonl"), scorers={"exact_match"})
+
+
+def test_power_from_run_binary_scorer_with_standardize(tmp_path):
+    from llm_lab.analysis import power as P
+    res = P.from_run(_write_results(tmp_path / "results.jsonl"),
+                     scorers={"exact_match"}, standardize=True)
+    assert res["standardize"] is True
+    assert res["metrics"] == ["E / exact_match"]    # sized on the accuracy track alone
+    # m1 clearly beats m3 on the binary metric -> a detectable effect (dz != 0, N computed)
+    by_model = {p.model: p for p in res["pairs"]}
+    assert by_model["mock/m3"].dz != 0.0 and by_model["mock/m3"].n_needed is not None
+
+
+def test_power_from_run_bad_filter_errors(tmp_path):
+    from llm_lab.analysis import power as P
+    with pytest.raises(ValueError, match="No metrics match"):
+        P.from_run(_write_results(tmp_path / "results.jsonl"), scorers={"nonexistent"})
