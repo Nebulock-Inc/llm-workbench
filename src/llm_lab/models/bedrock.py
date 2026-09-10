@@ -66,9 +66,14 @@ class BedrockClient(BaseClient):
         params: dict[str, Any] = {"modelId": self.native, "body": json.dumps(body)}
         try:
             resp = self.client.invoke_model(**params)
-        except Exception as exc:  # some models require an explicit trace setting
-            if "data retention" in str(exc):
+        except Exception as exc:
+            msg = str(exc)
+            if "data retention" in msg:  # some models require an explicit trace setting
                 params["trace"] = "DISABLED"
+                resp = self.client.invoke_model(**params)
+            elif "temperature" in msg and "deprecated" in msg:  # newer models reject temperature
+                body.pop("temperature", None)
+                params["body"] = json.dumps(body)
                 resp = self.client.invoke_model(**params)
             else:
                 raise
