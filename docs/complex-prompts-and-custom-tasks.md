@@ -59,7 +59,7 @@ Sometimes you want to run the **judges over a fixed answer** instead of a freshl
 
 ```bash
 uv run llm-lab run compare --task llm_lab.tasks:ReplayTask \
-    --dataset calibration.jsonl --model replay/none --eval-dir evals \
+    --dataset calibration.jsonl --model mock/echo --eval-dir evals \
     --judge-model bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0
 ```
 

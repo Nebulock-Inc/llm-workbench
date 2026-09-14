@@ -66,6 +66,25 @@ def test_bad_direction_rejected(tmp_path):
         load_spec(d)
 
 
+@pytest.mark.parametrize("value", ["true", "false", "0", "3"])
+def test_non_string_requires_aux_rejected(tmp_path, value):
+    # A YAML bool/number must be rejected, not coerced (true -> "True") or used to
+    # silently disable the gate (false/0).
+    d = _make(tmp_path / "e", f"name: Q\nrequires_aux: {value}\nlabels:\n  a: 1\nprompt: 'x {{input}}'\n")
+    with pytest.raises(EvalSpecError, match="requires_aux"):
+        load_spec(d)
+
+
+def test_blank_requires_aux_becomes_none(tmp_path):
+    d = _make(tmp_path / "e", "name: Q\nrequires_aux: '  '\nlabels:\n  a: 1\nprompt: 'x {input}'\n")
+    assert load_spec(d).requires_aux is None
+
+
+def test_valid_requires_aux_string_kept(tmp_path):
+    d = _make(tmp_path / "e", "name: Q\nrequires_aux: ' verdict '\nlabels:\n  a: 1\nprompt: 'x {input}'\n")
+    assert load_spec(d).requires_aux == "verdict"
+
+
 def test_scorers_only_eval_is_valid(tmp_path):
     d = _make(tmp_path / "e", "name: Q\nscorers:\n  - type: exact_match\n    expected_field: expected\n")
     spec = load_spec(d)

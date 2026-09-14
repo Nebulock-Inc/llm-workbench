@@ -169,6 +169,17 @@ def load_spec(path: str | Path) -> EvalSpec:
     if direction not in Direction.__members__:
         raise EvalSpecError(f"{path}: 'direction' must be one of {', '.join(Direction.__members__)}; got {direction!r}.")
 
+    # requires_aux names an aux key; only a string is meaningful. Reject non-strings
+    # (e.g. a YAML bool/number) rather than coercing (true -> "True") or silently
+    # disabling the gate (false/0). A valid empty/blank string collapses to None.
+    requires_aux_raw = raw.get("requires_aux")
+    if requires_aux_raw is not None and not isinstance(requires_aux_raw, str):
+        raise EvalSpecError(
+            f"{path}: 'requires_aux' must be a string naming the aux key that must be "
+            f"non-empty; got {type(requires_aux_raw).__name__} ({requires_aux_raw!r})."
+        )
+    requires_aux = (requires_aux_raw.strip() or None) if requires_aux_raw is not None else None
+
     try:
         return EvalSpec(
             name=str(raw["name"]),
@@ -179,7 +190,7 @@ def load_spec(path: str | Path) -> EvalSpec:
             use_structured_output=bool(raw.get("use_structured_output", False)),
             scorers=[ScorerSpec(**s) for s in scorers],
             ground_truth=ground_truth,
-            requires_aux=(str(raw["requires_aux"]).strip() or None) if raw.get("requires_aux") else None,
+            requires_aux=requires_aux,
             variables=find_variables(prompt),
             source_dir=path.parent,
         )
