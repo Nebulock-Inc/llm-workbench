@@ -101,14 +101,9 @@ class LLMJudgeScorer:
         )
 
     def score(self, ctx: ScoreContext) -> ScoreResult:
-        # Applicability gate: if this eval is scoped to rows carrying a particular task-aux
-        # value (`requires_aux`), skip rows where it is missing/blank. Emitting an `error`
-        # keeps the skipped row out of the score distribution (see analysis/frame.py) rather
-        # than scoring it as a 0 or asking the judge to grade something that isn't there.
-        req = self.spec.requires_aux
-        if req and not str(ctx.task_output.aux.get(req) or "").strip():
-            return ScoreResult(scorer=self.name, score=0.0,
-                               error=f"not applicable: task-aux {req!r} is empty")
+        # The `requires_aux` applicability gate is applied for every scorer in the runner's
+        # dispatch path (see runner/comparison.py), so this eval's judge is never reached on
+        # rows missing the required task-aux value.
 
         # Per-record ground-truth override: if this record carries the gold value for this
         # criterion, score against it deterministically instead of asking the judge.
