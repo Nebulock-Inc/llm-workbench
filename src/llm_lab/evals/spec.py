@@ -19,6 +19,7 @@ from llm_lab.evals.template import find_variables
 KNOWN_KEYS = {
     "name", "description", "labels", "prompt", "prompt_file",
     "direction", "use_structured_output", "scorers", "ground_truth",
+    "requires_aux",
 }
 
 
@@ -70,6 +71,11 @@ class EvalSpec(BaseModel):
     use_structured_output: bool = False
     scorers: list[ScorerSpec] = Field(default_factory=list)
     ground_truth: GroundTruthSpec | None = None             # per-record override of the judge
+    requires_aux: str | None = None                         # task-aux key that must be non-empty
+                                                            # for this eval to apply; when the key is
+                                                            # missing/blank the row is SKIPPED (scored
+                                                            # as an error so it drops out of the stats),
+                                                            # letting an eval scope to a subset of rows
     variables: tuple[str, ...] = ()                         # {placeholders} in the prompt
     source_dir: Path | None = None
 
@@ -173,6 +179,7 @@ def load_spec(path: str | Path) -> EvalSpec:
             use_structured_output=bool(raw.get("use_structured_output", False)),
             scorers=[ScorerSpec(**s) for s in scorers],
             ground_truth=ground_truth,
+            requires_aux=(str(raw["requires_aux"]).strip() or None) if raw.get("requires_aux") else None,
             variables=find_variables(prompt),
             source_dir=path.parent,
         )
