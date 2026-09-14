@@ -113,6 +113,26 @@ def test_mantle_forwards_system_and_temperature_but_not_stop():
     assert kw2["max_output_tokens"] == client.max_tokens
 
 
+def test_mantle_chat_kwargs_forwards_system_temperature_and_stop():
+    from llm_lab.config import LabConfig
+    from llm_lab.models.bedrock_mantle import MantleClient
+    from llm_lab.object_types import GenerationRequest
+
+    client = MantleClient.from_config(model_id="bedrock-mantle/g", native="g", config=LabConfig())
+    # The Chat Completions surface DOES support `stop` (unlike Responses): no warning, forwarded.
+    kw = client._chat_kwargs(GenerationRequest(prompt="hi", system="be terse", temperature=0.2,
+                                               max_tokens=50, stop=["END"]))
+    assert kw["messages"] == [{"role": "system", "content": "be terse"}, {"role": "user", "content": "hi"}]
+    assert kw["temperature"] == 0.2
+    assert kw["max_tokens"] == 50
+    assert kw["stop"] == ["END"]
+
+    kw2 = client._chat_kwargs(GenerationRequest(prompt="hi"))
+    assert kw2["messages"] == [{"role": "user", "content": "hi"}]  # no system message
+    assert "temperature" not in kw2 and "stop" not in kw2
+    assert kw2["max_tokens"] == client.max_tokens
+
+
 def test_mantle_annotate_flags_truncation():
     from llm_lab.config import LabConfig
     from llm_lab.models.bedrock_mantle import MantleClient
@@ -123,11 +143,80 @@ def test_mantle_annotate_flags_truncation():
     truncated = Response(text="", model_id="x",
                          raw={"status": "incomplete", "incomplete_details": {"reason": "max_output_tokens"}})
     assert client._annotate(truncated).error and "truncated" in client._annotate(truncated).error
-    # A normal completion is left untouched.
+    # The Chat Completions surface reports the same cap via finish_reason == "length".
+    chat_truncated = Response(text="", model_id="x", raw={"choices": [{"finish_reason": "length"}]})
+    assert "truncated" in (client._annotate(chat_truncated).error or "")
+    # A normal completion is left untouched (either surface).
     ok = Response(text="the answer", model_id="x", raw={"status": "completed"})
     assert client._annotate(ok).error is None
+    chat_ok = Response(text="the answer", model_id="x", raw={"choices": [{"finish_reason": "stop"}]})
+    assert client._annotate(chat_ok).error is None
     # Missing raw (None) must not crash.
     assert client._annotate(Response(text="", model_id="x")).error is None
+
+
+def test_mantle_endpoint_mismatch_detection():
+    from llm_lab.models.bedrock_mantle import _is_endpoint_mismatch
+
+    # Both observed "wrong endpoint" rejections advance the probe...
+    assert _is_endpoint_mismatch(Exception(
+        "Error code: 400 - The model 'zai.glm-4.7' does not support the '/openai/v1/responses' API"))
+    assert _is_endpoint_mismatch(Exception(
+        "Error code: 400 - model `zai.glm-4.7` isn't supported on this route"))
+    # ...but a genuine failure (unsupported param, timeout) must NOT be swallowed.
+    assert not _is_endpoint_mismatch(Exception("model does not support temperature"))
+    assert not _is_endpoint_mismatch(Exception("some unrelated timeout"))
+
+
+def test_mantle_probes_endpoints_until_one_answers_then_caches():
+    from llm_lab.config import LabConfig
+    from llm_lab.models.bedrock_mantle import MantleClient, _ENDPOINT_BY_MODEL
+    from llm_lab.object_types import GenerationRequest, Usage
+
+    _ENDPOINT_BY_MODEL.pop("zai.glm-4.7", None)  # start from an undetected model
+    client = MantleClient.from_config(model_id="bedrock-mantle/zai.glm-4.7", native="zai.glm-4.7",
+                                      config=LabConfig())
+    tried: list[tuple[str, str]] = []
+
+    # zai.glm-4.7: rejected on both /openai/v1 endpoints, answers on bare /v1 chat.
+    def fake_generate_via(endpoint, _request):
+        tried.append(endpoint)
+        base, api = endpoint
+        if base == "/openai/v1" and api == "responses":
+            raise Exception("does not support the '/openai/v1/responses' API")
+        if base == "/openai/v1" and api == "chat":
+            raise Exception("model `zai.glm-4.7` isn't supported on this route")
+        return "glm answer", Usage(), {"choices": [{"finish_reason": "stop"}]}
+
+    client._generate_via = fake_generate_via  # type: ignore[assignment]
+
+    text, _usage, _raw = client._raw_generate(GenerationRequest(prompt="hi"))
+    assert text == "glm answer"
+    assert tried == [("/openai/v1", "responses"), ("/openai/v1", "chat"), ("/v1", "chat")]
+    assert _ENDPOINT_BY_MODEL["zai.glm-4.7"] == ("/v1", "chat")  # winning endpoint cached
+
+    # Second call for the same model goes straight to the cached endpoint.
+    tried.clear()
+    client._raw_generate(GenerationRequest(prompt="again"))
+    assert tried == [("/v1", "chat")]
+
+
+def test_mantle_real_400_is_not_swallowed_by_the_probe():
+    from llm_lab.config import LabConfig
+    from llm_lab.models.bedrock_mantle import MantleClient, _ENDPOINT_BY_MODEL
+    from llm_lab.object_types import GenerationRequest
+
+    _ENDPOINT_BY_MODEL.pop("some.model", None)
+    client = MantleClient.from_config(model_id="bedrock-mantle/some.model", native="some.model",
+                                      config=LabConfig())
+
+    def real_error(_endpoint, _request):
+        raise ValueError("context length exceeded")  # not an endpoint mismatch
+
+    client._generate_via = real_error  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="context length exceeded"):
+        client._raw_generate(GenerationRequest(prompt="hi"))
+    assert "some.model" not in _ENDPOINT_BY_MODEL  # nothing cached on a real failure
 
 
 def test_annotate_hook_runs_after_generate():
