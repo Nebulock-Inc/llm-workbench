@@ -293,6 +293,29 @@ def test_power_from_run_binary_scorer_with_standardize(tmp_path):
     assert by_model["mock/m3"].dz != 0.0 and by_model["mock/m3"].n_needed is not None
 
 
+def test_power_from_run_constant_nonzero_diff_raises(tmp_path):
+    """Regression: a zero-variance paired difference with a nonzero mean is a perfectly
+    consistent (unbounded) effect, not zero effect — it must raise, not report dz=0."""
+    from llm_lab.analysis import power as P
+    # m1 passes every prompt, m2 fails every prompt. The binary metric varies across the run
+    # (so it survives z-scoring), but the m2-vs-m1 paired difference is a constant -1.
+    lines = []
+    for model, val in (("m1", 1), ("m2", 0)):
+        for i in range(6):
+            lines.append(json.dumps({
+                "model_id": f"mock/{model}", "record_id": f"q{i}", "input": {}, "output": "x",
+                "prompt": "p", "latency_s": 0.5, "usage": {}, "error": None,
+                "scores": [
+                    {"eval": "E", "scorer": "exact_match", "score": float(val),
+                     "passed": bool(val), "error": None},
+                ],
+            }))
+    path = tmp_path / "results.jsonl"
+    path.write_text("\n".join(lines) + "\n")
+    with pytest.raises(ValueError, match="zero-variance paired"):
+        P.from_run(path, scorers={"exact_match"}, standardize=True)
+
+
 def test_power_from_run_bad_filter_errors(tmp_path):
     from llm_lab.analysis import power as P
     with pytest.raises(ValueError, match="No metrics match"):

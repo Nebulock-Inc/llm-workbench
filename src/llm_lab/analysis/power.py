@@ -96,9 +96,23 @@ def from_run(results_path, reference: str | None = None, alpha: float = 0.05,
             continue
         diff = (composite[model] - composite[reference]).dropna()
         sd = diff.std()
-        dz = float(diff.mean() / sd) if sd else 0.0
+        mean_diff = float(diff.mean())
+        if sd == 0:
+            # Zero-variance paired differences: dz = mean/sd is 0/0 (no effect) only when the
+            # mean is also zero. A constant *nonzero* difference is a perfectly consistent
+            # effect (unbounded dz), which must not be reported as zero effect.
+            if mean_diff == 0:
+                dz = 0.0
+            else:
+                raise ValueError(
+                    f"Cannot estimate dz for {model!r} vs {reference!r} from zero-variance paired "
+                    f"differences with a nonzero mean ({mean_diff:g}): a perfectly consistent "
+                    "difference implies an unbounded effect size. Add variation or exclude this metric."
+                )
+        else:
+            dz = float(mean_diff / sd)
         pairs.append(PairPower(
-            model=model, reference=reference, dz=dz, mean_diff=float(diff.mean()),
+            model=model, reference=reference, dz=dz, mean_diff=mean_diff,
             n_pilot=len(diff),
             n_needed=(n_for_effect(dz, alpha, power, alternative) if dz else None),
             power_at_pilot=achieved_power(dz, len(diff), alpha, alternative),
