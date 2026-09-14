@@ -41,7 +41,7 @@ Everything is driven by one CLI, `llm-lab`:
 uv run llm-lab --help
 ```
 
-The workflow follows the sections below: **create evals → run a small pilot → size the study with power analysis → build the full test set → run the comparison → analyze the results.**
+The workflow follows the sections below: **define your task → create evals → run a small pilot → size the study with power analysis → build the full test set → run the comparison → analyze the results.**
 
 # Quickstart (run the shipped example)
 
@@ -81,6 +81,51 @@ A built-in task, `--task llm_lab.tasks:ReplayTask`, scores an answer already sto
 record instead of calling the model under test — for calibrating the judges, regression-testing
 a rubric or judge-model change, or re-scoring a past run. See
 [Replaying stored outputs](docs/complex-prompts-and-custom-tasks.md#replaying-stored-outputs-judge-calibration--re-scoring).
+
+# Defining Your Task
+
+A **task** is the thing you're testing: it takes one record from your dataset, does whatever your LLM needs to do with it, and returns the answer that your evals will score. Everything downstream — the prompts you write, the evals you design, the models you compare — is in service of measuring how well different models perform *this task*. So it's the first thing to pin down, even though the code for it can be as little as one file (or none).
+
+There are two ways to define a task, and most projects only ever need the first.
+
+## The default task: just a prompt template (no code)
+
+If your task is "fill each input into a prompt and ask the model" — the common one-prompt-per-row case — you don't write any code. You write a **prompt template**: a plain text file with `{placeholders}` that get filled from each dataset record's fields. Pass it with `--prompt-template`.
+
+`my_prompt.txt`:
+```
+You are a helpful security analyst. Answer the question using clear, specific language.
+
+Question: {input}
+```
+
+`{input}` is filled from the `input` field of each record in your dataset (see [Prompt Test Set Creation](#prompt-test-set-creation)). Any other field on the record can be a placeholder too — `{org_name}`, `{context}`, etc. — so **multi-variable prompts also need no code**; just add matching fields to your JSONL. (List/dict fields are rendered as readable JSON.) That's the whole task: `run compare --prompt-template my_prompt.txt ...` fills the template, calls each model, and hands the answer to your evals.
+
+## A custom task: when producing the input takes extra steps
+
+Write a **custom task** (a small Python class) only when getting to the answer needs steps *beyond* filling one template — resolving identifiers, injecting tenant/org scoping computed from an id, retrieving context, or a multi-call *generate → run → summarize* pipeline. A task is any class with a `name` and a `run(record, client) -> TaskOutput` method, where `client` is the model under test:
+
+```python
+# my_task.py
+from llm_lab.object_types import GenerationRequest
+from llm_lab.tasks.base import TaskOutput
+
+class MyTask:
+    name = "my-task"
+
+    def run(self, record, client):
+        # 1. do any prep: resolve ids, fetch context, build the prompt from record fields
+        prompt = f"Assisting {record['org_name']}.\n\nQuestion: {record['input']}"
+        # 2. call the model under test as many times as your workflow needs
+        resp = client.generate(GenerationRequest(prompt=prompt, max_tokens=512))
+        # 3. return the answer; expose any derived values to eval prompts via `aux`
+        return TaskOutput(output=resp.text, prompt=prompt, response=resp,
+                          aux={"org_name": record["org_name"]})
+```
+
+Point `run compare` at it with `--task my_task:MyTask` (the module just needs to be importable from your working directory — `--task` and `--prompt-template` are mutually exclusive). The `aux` dict is how a task surfaces derived values — retrieved context, generated queries, a resolved org — so your eval rubric prompts can reference them as `{placeholders}` exactly like `{input}` and `{output}`.
+
+Two runnable examples ship in the repo: [`examples/my_task.py`](examples/my_task.py) (minimal) and [`examples/org_scoped_task.py`](examples/org_scoped_task.py) (injects scoping and exposes `aux`). For the full contract — what `run` receives, everything `TaskOutput` can carry, how `aux` reaches your evals, and multi-step pipelines — see [Complex Prompts and Custom Tasks](docs/complex-prompts-and-custom-tasks.md). A built-in `ReplayTask` scores a pre-existing answer instead of calling a model, for judge calibration and re-scoring (see the [Quickstart](#quickstart-run-the-shipped-example) note).
 
 # Eval Creation
 
