@@ -143,7 +143,7 @@ def _reliability_table(rows: list[dict]) -> Table:
 
 def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_dir=None,
                  make_plots=True, eval_filter=None, scorer_filter=None, exclude_metrics=None,
-                 verbose: bool = False) -> dict:
+                 standardize: bool = False, verbose: bool = False) -> dict:
     from llm_lab.analysis import frame
 
     excluded = set(exclude_metrics or ())
@@ -178,11 +178,16 @@ def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_di
                    "individual metrics get mean tables.[/dim]")
 
     report: dict[str, Any] = {"models": models, "reference": reference, "alpha": alpha,
-                              "margin": margin, "reliability": reliability,
+                              "margin": margin, "reliability": reliability, "standardized": standardize,
                               "excluded_from_aggregate": sorted(excluded), "metrics": {}, "composite": None}
     if excluded:
         _console.print(f"[dim]Excluded from the aggregate/composite: {', '.join(sorted(excluded))} "
                        "(still analyzed individually below).[/dim]")
+    if standardize:
+        _console.print("[dim]Standardized composite: every metric (graded + binary accuracy) is "
+                       "z-scored within-metric, so all metrics are pooled on a common SD scale. "
+                       "Composite means, mixed-model coefficients, Cohen's d and the TOST margin are "
+                       f"all in SD units (margin ±{margin} SD).[/dim]")
 
     # Overall performance per model over quality metrics (matches calculate_overall_means).
     quality_rows = frame.aggregate_rows(long_df, excluded)
@@ -217,12 +222,12 @@ def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_di
         _console.print(pmt)
         _console.print("[dim]* = reference model[/dim]")
 
-    composite = frame.composite_quality(long_df, excluded)
+    composite = frame.composite_quality(long_df, excluded, standardize=standardize)
     if composite is not None and composite.shape[1] >= 2 and len(composite) >= 2:
         _console.print("\n[bold cyan]Mixed Effects Model Results[/bold cyan]")
         report["composite"] = _analyze_matrix(
             composite, reference=reference, alpha=alpha, margin=margin,
-            mixed_long=frame.aggregate_rows(long_df, excluded), verbose=verbose)
+            mixed_long=frame.pooled_rows(long_df, excluded, standardize=standardize), verbose=verbose)
 
 
         if verbose:
@@ -278,7 +283,8 @@ def _write_and_plot(out_dir: Path, report: dict, long_df, make_plots: bool) -> N
                                   out_dir / "composite_effects.png", "Quality difference vs reference")
             if p:
                 made.append(p)
-        comp_matrix = frame.composite_quality(long_df, set(report.get("excluded_from_aggregate", [])))
+        comp_matrix = frame.composite_quality(long_df, set(report.get("excluded_from_aggregate", [])),
+                                               standardize=report.get("standardized", False))
         if comp_matrix is not None:
             p2 = plots.violin_plot(comp_matrix, out_dir / "composite_violin.png",
                                    "Eval Score Distribution")

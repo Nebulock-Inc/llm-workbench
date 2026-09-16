@@ -112,14 +112,58 @@ def aggregate_rows(long_df: pd.DataFrame, exclude: set[str] | None = None) -> pd
     return quality[~quality["metric"].isin(exclude) & ~quality["eval"].isin(exclude)]
 
 
-def composite_quality(long_df: pd.DataFrame, exclude: set[str] | None = None) -> pd.DataFrame | None:
-    """Prompt x model matrix of the quality composite: mean over `quality` metrics.
+def _zscore_per_metric(df: pd.DataFrame) -> pd.DataFrame:
+    """Return `df` with `score` replaced by a within-metric z-score (population SD).
 
-    Returns None when no quality metrics remain. Not complete-cased (NaN where a model has
-    no composite for a prompt); callers skipna per model/pair, complete-casing only for the
-    Friedman omnibus.
+    Standardizing each metric to mean 0 / SD 1 makes metrics on different scales (e.g. a
+    1-5 rubric and a 0/1 accuracy) comparable and equally weighted, so they can be pooled
+    into one composite / mixed model.
+
+    Zero-variance metrics (every row equal across the run — e.g. all models pass a
+    guardrail) are DROPPED, not zeroed. They carry no signal to distinguish models, so
+    keeping them as 0 rows would dilute the composite toward 0, skew per-model/per-prompt
+    weighting when metric coverage differs, and add dead levels to the mixed model. Absence
+    of signal is not evidence of a zero model effect.
     """
-    quality = aggregate_rows(long_df, exclude)
-    if quality.empty:
+    sd = df.groupby("metric")["score"].transform(lambda s: s.std(ddof=0))
+    informative = df[sd > 0].copy()
+    if informative.empty:
+        return informative
+    informative["score"] = informative.groupby("metric")["score"].transform(
+        lambda s: (s - s.mean()) / s.std(ddof=0)
+    )
+    return informative
+
+
+def pooled_rows(long_df: pd.DataFrame, exclude: set[str] | None = None, *,
+                standardize: bool = False) -> pd.DataFrame:
+    """The rows that feed the composite + mixed model.
+
+    Default: the graded `quality` metrics on their raw scale (all on the same rubric),
+    minus excludes. With `standardize=True`: ALL metrics (graded quality AND binary
+    accuracy metrics like the ground-truth checks), each z-scored within metric, so
+    different scales are pooled on a common unit-variance scale — the composite and the
+    mixed-model coefficients are then in SD units. Zero-variance metrics are dropped (see
+    `_zscore_per_metric`). Operational metrics (latency) are already dropped upstream by
+    `load_long`.
+    """
+    exclude = exclude or set()
+    if not standardize:
+        return aggregate_rows(long_df, exclude)
+    rows = long_df[~long_df["metric"].isin(exclude) & ~long_df["eval"].isin(exclude)]
+    return _zscore_per_metric(rows)
+
+
+def composite_quality(long_df: pd.DataFrame, exclude: set[str] | None = None, *,
+                      standardize: bool = False) -> pd.DataFrame | None:
+    """Prompt x model matrix of the quality composite: mean over the pooled metrics.
+
+    Returns None when no metrics remain. Not complete-cased (NaN where a model has no
+    composite for a prompt); callers skipna per model/pair, complete-casing only for the
+    Friedman omnibus. See `pooled_rows` for which metrics are included and whether they are
+    z-scored (`standardize`).
+    """
+    rows = pooled_rows(long_df, exclude, standardize=standardize)
+    if rows.empty:
         return None
-    return quality.groupby(["prompt_id", "model"])["score"].mean().unstack()
+    return rows.groupby(["prompt_id", "model"])["score"].mean().unstack()

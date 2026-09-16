@@ -1,0 +1,3 @@
+{"id": "q1", "input": "Show failed logins in the last day.", "org_name": "Acme Corp"}
+{"id": "q2", "input": "Summarize this week's most active users.", "org_name": "Globex"}
+{"id": "q3", "input": "Which endpoints reported the most alerts?", "org_name": "Initech"}

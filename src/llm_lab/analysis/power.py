@@ -47,17 +47,42 @@ class PairPower:
 
 
 def from_run(results_path, reference: str | None = None, alpha: float = 0.05,
-             power: float = 0.8, alternative: str = "two-sided") -> dict:
+             power: float = 0.8, alternative: str = "two-sided",
+             standardize: bool = False, evals: set[str] | None = None,
+             scorers: set[str] | None = None) -> dict:
     """Estimate required N from a pilot run's observed effect sizes on the quality composite.
 
     For each model vs the reference: the observed paired dz, prompts needed to detect
     that effect at the target power, and the power actually achieved at the pilot's N.
+
+    By default the composite is the graded (`judge`-scored) quality metrics only — binary
+    accuracy metrics like the `ground_truth` checks are excluded. To size the study on
+    those instead (e.g. the AI / Maliciousness determination accuracy), filter to them with
+    `evals` / `scorers` and pass `standardize=True` so they are pooled (z-scored to SD
+    units); the resulting dz / N are then on the standardized composite of the selected
+    metrics.
     """
     from llm_lab.analysis import frame
 
     long_df = frame.load_long(results_path)
-    composite = frame.composite_quality(long_df)
+    if evals:
+        long_df = long_df[long_df["eval"].isin(evals)]
+    if scorers:
+        long_df = long_df[long_df["scorer"].isin(scorers)]
+    if long_df.empty:
+        raise ValueError("No metrics match the given --eval / --scorer filter.")
+
+    composite = frame.composite_quality(long_df, standardize=standardize)
     if composite is None or composite.shape[1] < 2:
+        # Common footgun: selecting only binary metrics (e.g. ground_truth) without
+        # --standardize — the default graded composite drops them, leaving nothing.
+        if (not standardize and (long_df["kind"] == "binary").any()
+                and not (long_df["kind"] == "quality").any()):
+            raise ValueError(
+                "The selected metric(s) are binary accuracy metrics (e.g. ground_truth), which "
+                "the default graded composite excludes. Re-run with --standardize to pool them "
+                "(z-scored to SD units)."
+            )
         raise ValueError("Pilot needs >=2 models and at least one quality metric.")
 
     models = list(composite.columns)
@@ -71,12 +96,29 @@ def from_run(results_path, reference: str | None = None, alpha: float = 0.05,
             continue
         diff = (composite[model] - composite[reference]).dropna()
         sd = diff.std()
-        dz = float(diff.mean() / sd) if sd else 0.0
+        mean_diff = float(diff.mean())
+        if sd == 0:
+            # Zero-variance paired differences: dz = mean/sd is 0/0 (no effect) only when the
+            # mean is also zero. A constant *nonzero* difference is a perfectly consistent
+            # effect (unbounded dz), which must not be reported as zero effect.
+            if mean_diff == 0:
+                dz = 0.0
+            else:
+                raise ValueError(
+                    f"Cannot estimate dz for {model!r} vs {reference!r} from zero-variance paired "
+                    f"differences with a nonzero mean ({mean_diff:g}): a perfectly consistent "
+                    "difference implies an unbounded effect size. Add variation or exclude this metric."
+                )
+        else:
+            dz = float(mean_diff / sd)
         pairs.append(PairPower(
-            model=model, reference=reference, dz=dz, mean_diff=float(diff.mean()),
+            model=model, reference=reference, dz=dz, mean_diff=mean_diff,
             n_pilot=len(diff),
             n_needed=(n_for_effect(dz, alpha, power, alternative) if dz else None),
             power_at_pilot=achieved_power(dz, len(diff), alpha, alternative),
         ))
+    # The metrics that actually entered the composite (graded-only when not standardized).
+    metrics = sorted(frame.pooled_rows(long_df, standardize=standardize)["metric"].unique().tolist())
     return {"reference": reference, "alpha": alpha, "target_power": power,
-            "alternative": alternative, "pairs": pairs}
+            "alternative": alternative, "standardize": standardize,
+            "metrics": metrics, "pairs": pairs}

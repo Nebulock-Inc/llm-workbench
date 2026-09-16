@@ -9,8 +9,19 @@ from llm_lab.config import LabConfig
 from llm_lab.datasets.jsonl import append_jsonl, read_jsonl
 from llm_lab.models.factory import make_client
 from llm_lab.runner.results import RunResult, ScoreRow, load_completed, print_summary, record_id, write_csv
-from llm_lab.scoring.base import ScoreContext
+from llm_lab.scoring.base import ScoreContext, ScoreResult
 from llm_lab.scoring.registry import build_scorers
+
+
+def _not_applicable_reason(spec, task_output) -> str | None:
+    """A spec scoped with `requires_aux` only applies to rows carrying a non-empty value
+    for that task-aux key. On other rows every scorer (deterministic and LLM-based alike)
+    is skipped as not-applicable — emitted as an `error` so the row stays out of the score
+    distribution (see analysis/frame.py) rather than being scored 0."""
+    req = spec.requires_aux
+    if req and not str(task_output.aux.get(req) or "").strip():
+        return f"not applicable: task-aux {req!r} is empty"
+    return None
 
 
 def run_comparison(
@@ -69,8 +80,10 @@ def run_comparison(
             for spec in specs:
                 ctx = ScoreContext(record=record, output=out.output, task_output=out,
                                    judge_client=judge_client)
+                na = _not_applicable_reason(spec, out)
                 for scorer in scorers_by_eval[spec.name]:
-                    res = scorer.score(ctx)
+                    res = (ScoreResult(scorer=scorer.name, score=0.0, error=na)
+                           if na is not None else scorer.score(ctx))
                     score_rows.append(ScoreRow(eval=spec.name, scorer=res.scorer, score=res.score,
                                                label=res.label, passed=res.passed,
                                                reasoning=res.reasoning, error=res.error))

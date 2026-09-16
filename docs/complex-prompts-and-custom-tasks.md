@@ -53,6 +53,34 @@ uv run llm-lab run compare --task examples.org_scoped_task:OrgScopedTask \
 
 A runnable version lives at [`examples/org_scoped_task.py`](../examples/org_scoped_task.py).
 
+## Replaying stored outputs (judge calibration & re-scoring)
+
+Sometimes you want to run the **judges over a fixed answer** instead of a freshly generated one — to calibrate the judges themselves, to regression-test a rubric or judge-model change, or to re-score a previous run. The built-in `ReplayTask` does exactly this: it ignores the model under test and returns an answer already present in each record, so the full judge/scoring/reporting pipeline runs over frozen inputs.
+
+```bash
+uv run llm-lab run compare --task llm_lab.tasks:ReplayTask \
+    --dataset calibration.jsonl --model mock/echo --eval-dir evals \
+    --judge-model bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0
+```
+
+Each record carries the frozen answer in an `output` field (plus whatever your eval prompts reference):
+
+```json
+{"id": "grounding-bad", "input": "...event...", "query_results": "...rows...",
+ "output": "VERDICT: AI\n\nThis was clearly an AI tool.",
+ "verdict": "AI", "target_dimension": "grounding", "expected_band": "low"}
+```
+
+Key points:
+
+- **The model under test is never called** — no generation cost or latency. The **judge model still runs**; it is the thing being tested. `--model` is only a run label here, but pass an id that *constructs* cleanly (the client may be built even though it's never queried).
+- **No generation means no `response`**, so the `latency` scorer has nothing to measure and is effectively N/A for replay runs.
+- **Record fields already reach eval prompts** (see the merge order below), so a fixture needs no extra wiring for `{input}`, `{query_results}`, etc. By default `ReplayTask` also copies every record field into `aux`, so a deterministic `ground_truth.aux_field` (e.g. a parsed `verdict`) resolves too — just include that value in the fixture row.
+- **Design your calibration set in good/bad pairs**, one bad fixture per failure mode per dimension, each with a known `expected_band`. A judge that scores the bad one low *and* its good twin high is discriminating; the good−bad gap per dimension is the signal. Commit the fixtures and re-run them on any rubric or judge-model change to keep the judges under regression test.
+- LLM judges have run-to-run variance even at `temperature=0`, so assert against expected *bands* (or average a few repeats) rather than exact scores.
+
+`ReplayTask` reads `output` by default; construct it with `field=` / `aux_fields=` (via a factory or `load_task(..., **kwargs)`) to replay a different field or copy only a subset of record keys into `aux`.
+
 ## What `run(record, client)` receives and returns
 
 - **`record`** — one row of your JSONL dataset, as a dict (all fields, including your own like `org_id`, `org_name`).

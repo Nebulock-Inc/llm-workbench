@@ -19,6 +19,7 @@ from llm_lab.evals.template import find_variables
 KNOWN_KEYS = {
     "name", "description", "labels", "prompt", "prompt_file",
     "direction", "use_structured_output", "scorers", "ground_truth",
+    "requires_aux",
 }
 
 
@@ -70,6 +71,11 @@ class EvalSpec(BaseModel):
     use_structured_output: bool = False
     scorers: list[ScorerSpec] = Field(default_factory=list)
     ground_truth: GroundTruthSpec | None = None             # per-record override of the judge
+    requires_aux: str | None = None                         # task-aux key that must be non-empty
+                                                            # for this eval to apply; when the key is
+                                                            # missing/blank the row is SKIPPED (scored
+                                                            # as an error so it drops out of the stats),
+                                                            # letting an eval scope to a subset of rows
     variables: tuple[str, ...] = ()                         # {placeholders} in the prompt
     source_dir: Path | None = None
 
@@ -163,6 +169,17 @@ def load_spec(path: str | Path) -> EvalSpec:
     if direction not in Direction.__members__:
         raise EvalSpecError(f"{path}: 'direction' must be one of {', '.join(Direction.__members__)}; got {direction!r}.")
 
+    # requires_aux names an aux key; only a string is meaningful. Reject non-strings
+    # (e.g. a YAML bool/number) rather than coercing (true -> "True") or silently
+    # disabling the gate (false/0). A valid empty/blank string collapses to None.
+    requires_aux_raw = raw.get("requires_aux")
+    if requires_aux_raw is not None and not isinstance(requires_aux_raw, str):
+        raise EvalSpecError(
+            f"{path}: 'requires_aux' must be a string naming the aux key that must be "
+            f"non-empty; got {type(requires_aux_raw).__name__} ({requires_aux_raw!r})."
+        )
+    requires_aux = (requires_aux_raw.strip() or None) if requires_aux_raw is not None else None
+
     try:
         return EvalSpec(
             name=str(raw["name"]),
@@ -173,6 +190,7 @@ def load_spec(path: str | Path) -> EvalSpec:
             use_structured_output=bool(raw.get("use_structured_output", False)),
             scorers=[ScorerSpec(**s) for s in scorers],
             ground_truth=ground_truth,
+            requires_aux=requires_aux,
             variables=find_variables(prompt),
             source_dir=path.parent,
         )

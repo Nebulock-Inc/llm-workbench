@@ -101,6 +101,10 @@ class LLMJudgeScorer:
         )
 
     def score(self, ctx: ScoreContext) -> ScoreResult:
+        # The `requires_aux` applicability gate is applied for every scorer in the runner's
+        # dispatch path (see runner/comparison.py), so this eval's judge is never reached on
+        # rows missing the required task-aux value.
+
         # Per-record ground-truth override: if this record carries the gold value for this
         # criterion, score against it deterministically instead of asking the judge.
         gt = self.spec.ground_truth
