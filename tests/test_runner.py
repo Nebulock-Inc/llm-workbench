@@ -113,6 +113,37 @@ def test_custom_task_with_aux_end_to_end(tmp_path):
     assert results[0]["scores"][0]["score"] == 1.0
 
 
+def test_requires_aux_gates_every_scorer(tmp_path):
+    # A spec scoped with `requires_aux` must skip ALL its scorers (judge + deterministic)
+    # on rows missing the required task-aux value, not just the judge.
+    from llm_lab.evals.spec import load_spec
+    from llm_lab.tasks.loader import load_task
+
+    ds = tmp_path / "d.jsonl"
+    ds.write_text('{"id": "q1", "output": "ans one", "verdict": "AI"}\n'
+                  '{"id": "q2", "output": "ans two"}\n')  # q2 has no verdict
+    edir = tmp_path / "e"
+    edir.mkdir()
+    (edir / "eval.yaml").write_text(
+        "name: V\nrequires_aux: verdict\nlabels:\n  good: 1\n  bad: 0\n"
+        "prompt: 'Grade {output}'\nscorers:\n  - type: contains\n    params:\n      substring: ans\n"
+    )
+    out = tmp_path / "runs"
+    run_comparison(
+        task=load_task("llm_lab.tasks:ReplayTask"),  # copies record fields into aux
+        dataset_path=ds, model_ids=["mock/echo"], specs=[load_spec(edir)],
+        judge_model="mock/canned:SCORE: 1", out_dir=out,
+    )
+    by_id = {r["record_id"]: r for r in _read_results(out / "results.jsonl")}
+    scorers = {"judge", "contains"}
+    # q1 carries the verdict -> every scorer runs, no not-applicable error.
+    assert {s["scorer"] for s in by_id["q1"]["scores"]} == scorers
+    assert all(s["error"] is None for s in by_id["q1"]["scores"])
+    # q2 lacks it -> every scorer is skipped as not-applicable.
+    assert {s["scorer"] for s in by_id["q2"]["scores"]} == scorers
+    assert all("not applicable" in (s["error"] or "") for s in by_id["q2"]["scores"])
+
+
 def test_summary_and_csv_dedupe_to_latest(tmp_path):
     from llm_lab.runner.results import summarize, write_csv
 
