@@ -11,6 +11,8 @@ This library, `llm_lab`, gives you a toolkit to do all the tasks involved in run
 * Running the experiment, collecting prompt/response pairs using LLMs from Anthropic, OpenAI, Ollama, or AWS Bedrock (including Bedrock Mantle)
 * Analyzing the results, selecting the best model for your use case
 
+Process Diagram
+![docs/llm-lab-diagram.png](docs/llm-lab-diagram.png)
 
 Read on to learn how to use it for all these steps.
 
