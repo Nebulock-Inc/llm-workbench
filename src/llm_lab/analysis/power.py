@@ -48,19 +48,19 @@ class PairPower:
 
 def from_run(results_path, reference: str | None = None, alpha: float = 0.05,
              power: float = 0.8, alternative: str = "two-sided",
-             standardize: bool = False, evals: set[str] | None = None,
+             standardize: bool = True, evals: set[str] | None = None,
              scorers: set[str] | None = None) -> dict:
     """Estimate required N from a pilot run's observed effect sizes on the quality composite.
 
     For each model vs the reference: the observed paired dz, prompts needed to detect
     that effect at the target power, and the power actually achieved at the pilot's N.
 
-    By default the composite is the graded (`judge`-scored) quality metrics only — binary
-    accuracy metrics like the `ground_truth` checks are excluded. To size the study on
-    those instead (e.g. the AI / Maliciousness determination accuracy), filter to them with
-    `evals` / `scorers` and pass `standardize=True` so they are pooled (z-scored to SD
-    units); the resulting dz / N are then on the standardized composite of the selected
-    metrics.
+    By default (`standardize=True`) all metrics are pooled — graded quality AND binary
+    accuracy metrics like the `ground_truth` checks — each z-scored within metric to a
+    common SD scale, so the resulting dz / N are in SD units. Pass `standardize=False` for
+    the raw graded-quality-only composite. To size the study on a specific track instead
+    (e.g. the AI / Maliciousness determination accuracy), filter to it with `evals` /
+    `scorers`.
     """
     from llm_lab.analysis import frame
 
@@ -80,8 +80,8 @@ def from_run(results_path, reference: str | None = None, alpha: float = 0.05,
                 and not (long_df["kind"] == "quality").any()):
             raise ValueError(
                 "The selected metric(s) are binary accuracy metrics (e.g. ground_truth), which "
-                "the default graded composite excludes. Re-run with --standardize to pool them "
-                "(z-scored to SD units)."
+                "the raw graded composite excludes. Drop --raw so they are standardized and "
+                "pooled (z-scored to SD units)."
             )
         raise ValueError("Pilot needs >=2 models and at least one quality metric.")
 

@@ -17,7 +17,9 @@ from llm_lab.cli.output import warn
 @click.argument("results", type=click.Path(exists=True))
 @click.option("--reference", default=None, help="Baseline model id for the mixed model / TOST (default: first).")
 @click.option("--alpha", type=float, default=0.05, show_default=True, help="Significance level.")
-@click.option("--margin", type=float, default=0.2, show_default=True, help="TOST equivalence margin (score points).")
+@click.option("--margin", type=float, default=0.2, show_default=True,
+              help="TOST equivalence margin, in SD units (the composite is standardized; "
+                   "with --raw it is raw score points).")
 @click.option("--eval", "eval_filter", multiple=True, help="Restrict to these eval names (repeatable).")
 @click.option("--scorer", "scorer_filter", multiple=True, help="Restrict to these scorer names (repeatable).")
 @click.option("--exclude-metric", "exclude_metrics", multiple=True,
@@ -26,10 +28,10 @@ from llm_lab.cli.output import warn
                    "different scale.")
 @click.option("--out-dir", default=None, help="Write analysis.json/.md (+plots) here. Default: alongside RESULTS.")
 @click.option("--plots/--no-plots", default=True, show_default=True, help="Generate matplotlib figures.")
-@click.option("--standardize/--raw", default=False, show_default=True,
-              help="Pool ALL metrics (graded + binary accuracy) into the composite by z-scoring each "
-                   "metric to a common SD scale, rather than averaging only the graded metrics on their "
-                   "raw scale. Effects/Cohen's d/TOST margin are then in SD units.")
+@click.option("--standardize/--raw", default=True, show_default=True,
+              help="Composite pooling. --standardize (default): z-score every metric (graded + binary "
+                   "accuracy) to a common SD scale so no metric dominates; effects/Cohen's d/TOST margin "
+                   "are in SD units. --raw: average only the graded metrics on their raw rubric scale.")
 @click.option("--verbose/--simple", default=False, help="Full stats vs. headline results only.")
 def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, exclude_metrics, out_dir,
             plots, standardize, verbose):

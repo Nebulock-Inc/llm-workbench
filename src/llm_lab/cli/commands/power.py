@@ -19,11 +19,11 @@ from llm_lab.cli.output import console, teach
               help="With --from-run: size N on these eval names only (repeatable).")
 @click.option("--scorer", "scorer_filter", multiple=True,
               help="With --from-run: size N on these scorers only, e.g. 'ground_truth' for the "
-                   "AI/Maliciousness accuracy track (repeatable). Binary metrics need --standardize.")
-@click.option("--standardize/--raw", default=False, show_default=True,
-              help="With --from-run: pool the selected metrics (incl. binary accuracy metrics like "
-                   "ground_truth) by z-scoring each to a common SD scale, rather than averaging only "
-                   "graded metrics on their raw scale. dz / N are then in SD units.")
+                   "AI/Maliciousness accuracy track (repeatable). Binary metrics are pooled by default.")
+@click.option("--standardize/--raw", default=True, show_default=True,
+              help="With --from-run: --standardize (default) pools all metrics (incl. binary accuracy "
+                   "metrics like ground_truth) by z-scoring each to a common SD scale, so dz / N are in "
+                   "SD units. --raw averages only the graded metrics on their raw rubric scale.")
 @click.option("--alpha", type=float, default=0.05, show_default=True)
 @click.option("--power", "target_power", type=float, default=0.8, show_default=True)
 @click.option("--alternative", type=click.Choice(["two-sided", "larger", "smaller"]),
@@ -35,9 +35,10 @@ def power(effect_size, mean_diff, sd_diff, from_run_path, reference, eval_filter
     Provide a target --effect-size (or --mean-diff + --sd-diff), or --from-run to size
     the full study from a small pilot run's observed effects.
 
-    --from-run sizes on the graded quality composite by default. To size on the
-    ground-truth accuracy track instead (e.g. when the judged metrics are saturated), add
-    --scorer ground_truth --standardize.
+    --from-run pools all metrics into a standardized composite by default (z-scored to SD
+    units). To size on a single track instead (e.g. the ground-truth accuracy when the
+    judged metrics are saturated), add --scorer ground_truth. Pass --raw for the graded-only
+    composite on the raw rubric scale.
     """
     try:
         import statsmodels  # noqa: F401

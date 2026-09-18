@@ -143,7 +143,7 @@ def _reliability_table(rows: list[dict]) -> Table:
 
 def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_dir=None,
                  make_plots=True, eval_filter=None, scorer_filter=None, exclude_metrics=None,
-                 standardize: bool = False, verbose: bool = False) -> dict:
+                 standardize: bool = True, verbose: bool = False) -> dict:
     from llm_lab.analysis import frame
 
     excluded = set(exclude_metrics or ())

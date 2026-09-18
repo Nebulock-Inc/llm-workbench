@@ -268,18 +268,27 @@ def test_cli_power(tmp_path):
     assert result.exit_code == 0 and "34 prompts" in result.output
 
 
-def test_power_from_run_default_uses_graded_quality(tmp_path):
+def test_power_from_run_default_standardizes_all_metrics(tmp_path):
     from llm_lab.analysis import power as P
     res = P.from_run(_write_results(tmp_path / "results.jsonl"))
-    assert res["standardize"] is False
-    assert res["metrics"] == ["E / judge"]          # binary metric excluded by default
+    assert res["standardize"] is True
+    assert res["metrics"] == ["E / exact_match", "E / judge"]   # all metrics pooled by default
     assert {p.model for p in res["pairs"]} == {"mock/m2", "mock/m3"}
 
 
-def test_power_from_run_binary_scorer_without_standardize_errors(tmp_path):
+def test_power_from_run_raw_uses_graded_quality_only(tmp_path):
+    from llm_lab.analysis import power as P
+    res = P.from_run(_write_results(tmp_path / "results.jsonl"), standardize=False)
+    assert res["standardize"] is False
+    assert res["metrics"] == ["E / judge"]          # --raw: binary metric excluded
+
+
+def test_power_from_run_binary_scorer_with_raw_errors(tmp_path):
+    """--raw drops binary metrics, so selecting only binary leaves nothing to size on."""
     from llm_lab.analysis import power as P
     with pytest.raises(ValueError, match="standardize"):
-        P.from_run(_write_results(tmp_path / "results.jsonl"), scorers={"exact_match"})
+        P.from_run(_write_results(tmp_path / "results.jsonl"),
+                   scorers={"exact_match"}, standardize=False)
 
 
 def test_power_from_run_binary_scorer_with_standardize(tmp_path):

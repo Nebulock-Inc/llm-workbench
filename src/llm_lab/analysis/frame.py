@@ -136,16 +136,16 @@ def _zscore_per_metric(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def pooled_rows(long_df: pd.DataFrame, exclude: set[str] | None = None, *,
-                standardize: bool = False) -> pd.DataFrame:
+                standardize: bool = True) -> pd.DataFrame:
     """The rows that feed the composite + mixed model.
 
-    Default: the graded `quality` metrics on their raw scale (all on the same rubric),
-    minus excludes. With `standardize=True`: ALL metrics (graded quality AND binary
-    accuracy metrics like the ground-truth checks), each z-scored within metric, so
-    different scales are pooled on a common unit-variance scale — the composite and the
-    mixed-model coefficients are then in SD units. Zero-variance metrics are dropped (see
-    `_zscore_per_metric`). Operational metrics (latency) are already dropped upstream by
-    `load_long`.
+    Default (`standardize=True`): ALL metrics (graded quality AND binary accuracy metrics
+    like the ground-truth checks), each z-scored within metric, so different scales are
+    pooled on a common unit-variance scale — the composite and the mixed-model coefficients
+    are then in SD units. Zero-variance metrics are dropped (see `_zscore_per_metric`).
+    With `standardize=False`: only the graded `quality` metrics on their raw scale (all on
+    the same rubric), minus excludes. Operational metrics (latency) are already dropped
+    upstream by `load_long`.
     """
     exclude = exclude or set()
     if not standardize:
@@ -155,7 +155,7 @@ def pooled_rows(long_df: pd.DataFrame, exclude: set[str] | None = None, *,
 
 
 def composite_quality(long_df: pd.DataFrame, exclude: set[str] | None = None, *,
-                      standardize: bool = False) -> pd.DataFrame | None:
+                      standardize: bool = True) -> pd.DataFrame | None:
     """Prompt x model matrix of the quality composite: mean over the pooled metrics.
 
     Returns None when no metrics remain. Not complete-cased (NaN where a model has no

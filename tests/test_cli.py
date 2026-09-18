@@ -42,6 +42,30 @@ def test_evals_new_list_validate(tmp_path):
     assert validated.exit_code == 0 and "1/1 valid" in validated.output
 
 
+def test_init_scaffolds_starter(tmp_path):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "prompt.txt").is_file()
+    assert (tmp_path / "dataset.jsonl").is_file()
+    assert (tmp_path / "evals_kit" / "example-helpfulness" / "eval.yaml").is_file()
+    assert (tmp_path / "evals_kit" / "example-helpfulness" / "prompt.md").is_file()
+
+
+def test_init_skips_existing_without_force(tmp_path):
+    runner = CliRunner()
+    assert runner.invoke(cli, ["init", str(tmp_path)]).exit_code == 0
+    (tmp_path / "dataset.jsonl").write_text("MINE\n")
+
+    again = runner.invoke(cli, ["init", str(tmp_path)])
+    assert again.exit_code == 0
+    assert (tmp_path / "dataset.jsonl").read_text() == "MINE\n"  # untouched
+
+    forced = runner.invoke(cli, ["init", str(tmp_path), "--force"])
+    assert forced.exit_code == 0
+    assert (tmp_path / "dataset.jsonl").read_text() != "MINE\n"  # overwritten
+
+
 def test_run_compare(tmp_path):
     runner = CliRunner()
     dataset = tmp_path / "data.jsonl"
