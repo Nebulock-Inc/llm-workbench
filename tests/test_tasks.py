@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from llm_lab.tasks import ReplayTask
-from llm_lab.tasks.loader import load_task
+from llm_workbench.tasks import ReplayTask
+from llm_workbench.tasks.loader import load_task
 
 
 def _record():
@@ -49,7 +49,7 @@ def test_replay_missing_field_raises_with_helpful_message():
 
 
 def test_replay_loadable_by_task_spec_zero_arg():
-    # Mirrors the CLI `--task llm_lab.tasks:ReplayTask` path (no constructor kwargs).
-    task = load_task("llm_lab.tasks:ReplayTask")
+    # Mirrors the CLI `--task llm_workbench.tasks:ReplayTask` path (no constructor kwargs).
+    task = load_task("llm_workbench.tasks:ReplayTask")
     assert task.name == "replay"
     assert task.run(_record(), client=None).output.startswith("VERDICT: AI")

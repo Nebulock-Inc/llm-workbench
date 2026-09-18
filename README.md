@@ -1,7 +1,7 @@
 # Find the LLM You Need
 
 
-This library, `llm_lab`, gives you a toolkit to do all the tasks involved in running experiments testing different LLM options on your particular use case.
+This library, `llm_workbench`, gives you a toolkit to do all the tasks involved in running experiments testing different LLM options on your particular use case.
 
 * Defining your task (what your LLM needs to do)
 * Creating evals
@@ -33,46 +33,46 @@ Requires Python 3.12+.
 Install it into your own project — the whole toolkit is one package with a single CLI:
 
 ```bash
-uv add "llm-lab[analysis]"        # or: pip install "llm-lab[analysis]"
+uv add "llm-workbench[analysis]"        # or: pip install "llm-workbench[analysis]"
 ```
 
 Extras keep the base install light; add the ones you need:
 
 | Install | Adds | You need it if… |
 |---|---|---|
-| `llm-lab` | Ollama + AWS Bedrock clients | you only use local Ollama or Bedrock |
-| `llm-lab[openai]` | OpenAI SDK | you use `openai/` **or** `bedrock-mantle/` model ids |
-| `llm-lab[anthropic]` | native Anthropic SDK | you use the `anthropic/` client |
-| `llm-lab[analysis]` | pandas / scipy / statsmodels / matplotlib | you run `power` or `analyze` — **most users want this** |
+| `llm-workbench` | Ollama + AWS Bedrock clients | you only use local Ollama or Bedrock |
+| `llm-workbench[openai]` | OpenAI SDK | you use `openai/` **or** `bedrock-mantle/` model ids |
+| `llm-workbench[anthropic]` | native Anthropic SDK | you use the `anthropic/` client |
+| `llm-workbench[analysis]` | pandas / scipy / statsmodels / matplotlib | you run `power` or `analyze` — **most users want this** |
 
-Combine them as needed, e.g. `uv add "llm-lab[analysis,anthropic]"`.
+Combine them as needed, e.g. `uv add "llm-workbench[analysis,anthropic]"`.
 
-Everything is driven by one CLI, `llm-lab` (verify the install):
+Everything is driven by one CLI, `llm-workbench` (verify the install):
 
 ```bash
-llm-lab --help
+llm-workbench --help
 ```
 
 The workflow follows the sections below: **define your task → create evals → run a small pilot → size the study with power analysis → build the full test set → run the comparison → analyze the results.**
 
-> **Developing on llm-lab itself?** Clone the repo and `uv sync --extra analysis` instead; then prefix commands with `uv run` (e.g. `uv run llm-lab --help`). The examples below use the installed `llm-lab` command.
+> **Developing on llm-workbench itself?** Clone the repo and `uv sync --extra analysis` instead; then prefix commands with `uv run` (e.g. `uv run llm-workbench --help`). The examples below use the installed `llm-workbench` command.
 
 # Quickstart (scaffold a starter and run it)
 
-`llm-lab init` writes a tiny, self-contained example into your current directory — a
+`llm-workbench init` writes a tiny, self-contained example into your current directory — a
 general-knowledge Q&A dataset (`dataset.jsonl`), a prompt template (`prompt.txt`), and a
 judge eval (`evals_kit/example-helpfulness/`). These are yours to keep and edit, so you see
 the whole loop before wiring up your own task and data.
 
 ```bash
-llm-lab init          # scaffolds prompt.txt, dataset.jsonl, evals_kit/example-helpfulness/
+llm-workbench init          # scaffolds prompt.txt, dataset.jsonl, evals_kit/example-helpfulness/
 ```
 
 **1. Smoke test with zero credentials.** The `mock/echo` provider just echoes the prompt,
 so this needs no API keys — it proves the pipeline runs end to end (no judge, so no scores):
 
 ```bash
-llm-lab run compare \
+llm-workbench run compare \
     --prompt-template prompt.txt --dataset dataset.jsonl \
     --model mock/echo --eval example-helpfulness --out-dir runs/example
 ```
@@ -82,21 +82,21 @@ llm-lab run compare \
 to actually score answers:
 
 ```bash
-llm-lab run compare \
+llm-workbench run compare \
     --prompt-template prompt.txt --dataset dataset.jsonl \
     --model ollama/llama3.1 --model ollama/mistral \
     --eval example-helpfulness --judge-model ollama/llama3.1 --out-dir runs/example
-llm-lab analyze runs/example --reference ollama/llama3.1   # needs the `analysis` extra
+llm-workbench analyze runs/example --reference ollama/llama3.1   # needs the `analysis` extra
 ```
 
 From here, replace the starter with your own: write your dataset (or build one with
-`llm-lab dataset`), create an eval with `llm-lab evals new`, and — if your task needs more
+`llm-workbench dataset`), create an eval with `llm-workbench evals new`, and — if your task needs more
 than filling a template — a custom `--task`. The repo's
 [`examples/`](examples/) has custom-task templates: [`examples/my_task.py`](examples/my_task.py)
 (minimal) and [`examples/org_scoped_task.py`](examples/org_scoped_task.py) (injects per-record
 context and exposes derived values to the eval via `aux`).
 
-A built-in task, `--task llm_lab.tasks:ReplayTask`, scores an answer already stored in the
+A built-in task, `--task llm_workbench.tasks:ReplayTask`, scores an answer already stored in the
 record instead of calling the model under test — for calibrating the judges, regression-testing
 a rubric or judge-model change, or re-scoring a past run. See
 [Replaying stored outputs](docs/complex-prompts-and-custom-tasks.md#replaying-stored-outputs-judge-calibration--re-scoring).
@@ -126,8 +126,8 @@ Write a **custom task** (a small Python class) only when getting to the answer n
 
 ```python
 # my_task.py
-from llm_lab.object_types import GenerationRequest
-from llm_lab.tasks.base import TaskOutput
+from llm_workbench.object_types import GenerationRequest
+from llm_workbench.tasks.base import TaskOutput
 
 class MyTask:
     name = "my-task"
@@ -153,20 +153,20 @@ An *eval* is a folder (`eval.yaml` + `prompt.md`) describing how to score a mode
 Create one with the guided wizard — it walks you through the rubric and the judge prompt:
 
 ```bash
-llm-lab evals new
+llm-workbench evals new
 ```
 
 It asks for a name, description, a rubric (a 1-5 or binary preset you can edit, or a fully custom scale), which `{variables}` the judge reads (usually `input` = the question and `output` = the model's answer), and any programmatic checks. It previews the files and validates before saving. To skip the prompts (e.g. in CI):
 
 ```bash
-llm-lab evals new answer-quality --labels 1-5 --yes
+llm-workbench evals new answer-quality --labels 1-5 --yes
 ```
 
 Manage existing evals:
 
 ```bash
-llm-lab evals list                 # table of evals, their scales, and variables
-llm-lab evals validate             # check every eval in evals_kit/ parses
+llm-workbench evals list                 # table of evals, their scales, and variables
+llm-workbench evals validate             # check every eval in evals_kit/ parses
 ```
 
 **Scoring options** an eval can use:
@@ -187,7 +187,7 @@ The number of prompts you need depends on how *different* your candidate models 
 **2. Run the comparison on it**, using the same models, evals, and judge you intend to use for the full study, so the measured effect is realistic:
 
 ```bash
-llm-lab run compare \
+llm-workbench run compare \
     --prompt-template my_prompt.txt \
     --dataset pilot.jsonl \
     --model ollama/llama3.1 --model anthropic/claude-sonnet-4-5 \
@@ -196,18 +196,18 @@ llm-lab run compare \
     --out-dir runs/pilot
 ```
 
-This writes `runs/pilot/results.jsonl`, which is the input to `llm-lab power --from-run` below. (Runs resume, so you can also grow the pilot later by re-running with more prompts — new prompts are appended, already-scored ones are skipped.)
+This writes `runs/pilot/results.jsonl`, which is the input to `llm-workbench power --from-run` below. (Runs resume, so you can also grow the pilot later by re-running with more prompts — new prompts are appended, already-scored ones are skipped.)
 
 A pilot is worth the cost because it uses *your* task and *your* evals; a sample size guessed from a generic effect size can be off by an order of magnitude. If you genuinely can't run one, the power tool also accepts an assumed effect size directly (see below).
 
 # Power Analysis - How Many Prompts?
 
-Because every prompt is run on every model, this is a **paired (repeated-measures)** design: the unit is the per-prompt difference between models. `llm-lab power` turns a difference of a given size (effect size `dz` = mean difference / SD of differences) into the number of prompts needed to detect it reliably. Needs the `analysis` extra.
+Because every prompt is run on every model, this is a **paired (repeated-measures)** design: the unit is the per-prompt difference between models. `llm-workbench power` turns a difference of a given size (effect size `dz` = mean difference / SD of differences) into the number of prompts needed to detect it reliably. Needs the `analysis` extra.
 
 **From your pilot run** (recommended) — size the full study from the effects you actually observed:
 
 ```bash
-llm-lab power --from-run runs/pilot --reference ollama/llama3.1
+llm-workbench power --from-run runs/pilot --reference ollama/llama3.1
 ```
 
 This reports, per model vs. the reference, the observed effect, the power your pilot already achieved, and the prompts needed to reach your target power — plus a recommended N for the *smallest* (hardest to detect) effect, since that gap sets the sample size for the whole study. Tune with `--alpha` (default 0.05), `--power` (default 0.8), and `--alternative`.
@@ -215,8 +215,8 @@ This reports, per model vs. the reference, the observed effect, the power your p
 **Without a pilot** — if you can only assume an effect size, size it directly:
 
 ```bash
-llm-lab power --effect-size 0.5              # -> N prompts at alpha=0.05, power=0.8
-llm-lab power --mean-diff 0.4 --sd-diff 0.8  # dz = 0.4 / 0.8 = 0.5, so same N
+llm-workbench power --effect-size 0.5              # -> N prompts at alpha=0.05, power=0.8
+llm-workbench power --mean-diff 0.4 --sd-diff 0.8  # dz = 0.4 / 0.8 = 0.5, so same N
 ```
 
 > Sample sizes use the paired t-test; the Wilcoxon test used in `analyze` is ~95% as efficient, so add a small margin if you rely on it.
@@ -235,13 +235,13 @@ Author it by hand, or build it:
 **From a spreadsheet** (every column becomes a field):
 
 ```bash
-llm-lab dataset from-csv prompts.csv -o test_set.jsonl --id-col qid
+llm-workbench dataset from-csv prompts.csv -o test_set.jsonl --id-col qid
 ```
 
 **Generated by an LLM** (a starter set to review and edit):
 
 ```bash
-llm-lab dataset generate --model anthropic/claude-sonnet-4-5 \
+llm-workbench dataset generate --model anthropic/claude-sonnet-4-5 \
     --instructions "security-analyst questions about threat hunts and detections" \
     -n 30 --with-expected -o test_set.jsonl
 ```
@@ -251,7 +251,7 @@ llm-lab dataset generate --model anthropic/claude-sonnet-4-5 \
 Point `run compare` at your dataset, list the candidate models, and choose the eval(s) to score with. Supply `--judge-model` to enable LLM-judge scoring.
 
 ```bash
-llm-lab run compare \
+llm-workbench run compare \
     --prompt-template my_prompt.txt \
     --dataset test_set.jsonl \
     --model ollama/llama3.1 --model openai/gpt-4o-mini --model anthropic/claude-sonnet-4-5 \
@@ -319,8 +319,8 @@ Credentials and endpoints come from the environment (a local `.env` is loaded au
 Check providers and test connectivity:
 
 ```bash
-llm-lab models list                 # registered providers + example ids
-llm-lab models ping ollama/llama3.1  # one short call, prints latency/result
+llm-workbench models list                 # registered providers + example ids
+llm-workbench models ping ollama/llama3.1  # one short call, prints latency/result
 ```
 
 ## Understanding the Output
@@ -362,10 +362,10 @@ The CSV covers only tasks that produced a usable output — task-level failures 
 
 ## Result Analysis
 
-`llm-lab analyze` runs the statistics appropriate to your data and design (paired on prompt). Needs the `analysis` extra.
+`llm-workbench analyze` runs the statistics appropriate to your data and design (paired on prompt). Needs the `analysis` extra.
 
 ```bash
-llm-lab analyze runs/experiment-1 --reference anthropic/claude-sonnet-4-5
+llm-workbench analyze runs/experiment-1 --reference anthropic/claude-sonnet-4-5
 ```
 
 It first reports **reliability** — each model's task-completion rate (fraction of prompts that produced a usable answer, computed from every recorded row including failures). This matters because the quality stats below are complete-case: they only cover prompts a model actually answered, so a model that fails often can still post strong quality scores. Read reliability and quality together.
