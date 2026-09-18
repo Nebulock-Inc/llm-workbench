@@ -32,7 +32,7 @@ def _write_results(path):
 
 
 def test_dedupes_to_latest_run(tmp_path):
-    from llm_lab.analysis.frame import load_long, reliability
+    from llm_workbench.analysis.frame import load_long, reliability
 
     lines = [
         # older run for m1/q0 -> judge 2
@@ -56,7 +56,7 @@ def test_dedupes_to_latest_run(tmp_path):
 
 
 def test_quality_uses_latest_successful_not_latest_overall(tmp_path):
-    from llm_lab.analysis.frame import load_long, reliability
+    from llm_workbench.analysis.frame import load_long, reliability
 
     lines = [
         # m1/q0: earlier SUCCESS (4.0), then a LATER task FAILURE
@@ -79,7 +79,7 @@ def test_quality_uses_latest_successful_not_latest_overall(tmp_path):
 
 
 def test_load_long_classifies_metrics(tmp_path):
-    from llm_lab.analysis.frame import load_long
+    from llm_workbench.analysis.frame import load_long
 
     df = load_long(_write_results(tmp_path / "results.jsonl"))
     kinds = dict(zip(df["metric"], df["kind"]))
@@ -91,7 +91,7 @@ def test_load_long_drops_operational_scorers(tmp_path):
     """Latency is a run-time threshold metric, not part of the statistical analysis."""
     import json
 
-    from llm_lab.analysis.frame import load_long
+    from llm_workbench.analysis.frame import load_long
 
     path = tmp_path / "results.jsonl"
     lines = []
@@ -112,7 +112,7 @@ def test_load_long_drops_operational_scorers(tmp_path):
 
 
 def test_run_analysis_verbose_reports_all_tests(tmp_path):
-    from llm_lab.analysis.report import run_analysis
+    from llm_workbench.analysis.report import run_analysis
 
     _write_results(tmp_path / "results.jsonl")
     report = run_analysis(tmp_path, out_dir=tmp_path, make_plots=False, verbose=True)
@@ -139,7 +139,7 @@ def test_run_analysis_verbose_reports_all_tests(tmp_path):
 
 
 def test_run_analysis_simple_is_leaner(tmp_path):
-    from llm_lab.analysis.report import run_analysis
+    from llm_workbench.analysis.report import run_analysis
 
     _write_results(tmp_path / "results.jsonl")
     report = run_analysis(tmp_path, out_dir=tmp_path, make_plots=False)  # verbose=False (default)
@@ -158,7 +158,7 @@ def test_run_analysis_simple_is_leaner(tmp_path):
 def test_exclude_metric_from_aggregate(tmp_path):
     import random
 
-    from llm_lab.analysis.report import run_analysis
+    from llm_workbench.analysis.report import run_analysis
 
     random.seed(1)
     lines = []
@@ -187,7 +187,7 @@ def test_exclude_metric_from_aggregate(tmp_path):
 
 
 def test_incomplete_coverage_uses_per_model_prompts(tmp_path):
-    from llm_lab.analysis.report import run_analysis
+    from llm_workbench.analysis.report import run_analysis
 
     lines = []
     for model in ("m1", "m2", "m3"):
@@ -211,7 +211,7 @@ def test_incomplete_coverage_uses_per_model_prompts(tmp_path):
 
 
 def test_analyze_needs_two_models(tmp_path):
-    from llm_lab.analysis.report import run_analysis
+    from llm_workbench.analysis.report import run_analysis
 
     (tmp_path / "results.jsonl").write_text(json.dumps({
         "model_id": "mock/only", "record_id": "q0", "input": {}, "output": "x", "prompt": "p",
@@ -225,7 +225,7 @@ def test_analyze_needs_two_models(tmp_path):
 def test_cli_analyze(tmp_path):
     from click.testing import CliRunner
 
-    from llm_lab.cli.main import cli
+    from llm_workbench.cli.main import cli
 
     _write_results(tmp_path / "results.jsonl")
     result = CliRunner().invoke(cli, ["analyze", str(tmp_path), "--no-plots"])
@@ -236,21 +236,21 @@ def test_cli_analyze(tmp_path):
 # --- power analysis ------------------------------------------------------
 
 def test_power_n_for_effect():
-    from llm_lab.analysis.power import n_for_effect
+    from llm_workbench.analysis.power import n_for_effect
 
     assert n_for_effect(0.5, alpha=0.05, power=0.8) == 34   # standard reference value
     assert n_for_effect(1.0) < n_for_effect(0.3)            # bigger effect -> fewer prompts
 
 
 def test_power_achieved_increases_with_n():
-    from llm_lab.analysis.power import achieved_power
+    from llm_workbench.analysis.power import achieved_power
 
     assert achieved_power(0.5, 10) < achieved_power(0.5, 50)
     assert achieved_power(0.0, 100) == 0.0
 
 
 def test_power_from_run(tmp_path):
-    from llm_lab.analysis.power import from_run
+    from llm_workbench.analysis.power import from_run
 
     _write_results(tmp_path / "results.jsonl")
     result = from_run(tmp_path, reference="mock/m1", power=0.8)
@@ -262,14 +262,14 @@ def test_power_from_run(tmp_path):
 def test_cli_power(tmp_path):
     from click.testing import CliRunner
 
-    from llm_lab.cli.main import cli
+    from llm_workbench.cli.main import cli
 
     result = CliRunner().invoke(cli, ["power", "--effect-size", "0.5"])
     assert result.exit_code == 0 and "34 prompts" in result.output
 
 
 def test_power_from_run_default_standardizes_all_metrics(tmp_path):
-    from llm_lab.analysis import power as P
+    from llm_workbench.analysis import power as P
     res = P.from_run(_write_results(tmp_path / "results.jsonl"))
     assert res["standardize"] is True
     assert res["metrics"] == ["E / exact_match", "E / judge"]   # all metrics pooled by default
@@ -277,7 +277,7 @@ def test_power_from_run_default_standardizes_all_metrics(tmp_path):
 
 
 def test_power_from_run_raw_uses_graded_quality_only(tmp_path):
-    from llm_lab.analysis import power as P
+    from llm_workbench.analysis import power as P
     res = P.from_run(_write_results(tmp_path / "results.jsonl"), standardize=False)
     assert res["standardize"] is False
     assert res["metrics"] == ["E / judge"]          # --raw: binary metric excluded
@@ -285,14 +285,14 @@ def test_power_from_run_raw_uses_graded_quality_only(tmp_path):
 
 def test_power_from_run_binary_scorer_with_raw_errors(tmp_path):
     """--raw drops binary metrics, so selecting only binary leaves nothing to size on."""
-    from llm_lab.analysis import power as P
+    from llm_workbench.analysis import power as P
     with pytest.raises(ValueError, match="standardize"):
         P.from_run(_write_results(tmp_path / "results.jsonl"),
                    scorers={"exact_match"}, standardize=False)
 
 
 def test_power_from_run_binary_scorer_with_standardize(tmp_path):
-    from llm_lab.analysis import power as P
+    from llm_workbench.analysis import power as P
     res = P.from_run(_write_results(tmp_path / "results.jsonl"),
                      scorers={"exact_match"}, standardize=True)
     assert res["standardize"] is True
@@ -305,7 +305,7 @@ def test_power_from_run_binary_scorer_with_standardize(tmp_path):
 def test_power_from_run_constant_nonzero_diff_raises(tmp_path):
     """Regression: a zero-variance paired difference with a nonzero mean is a perfectly
     consistent (unbounded) effect, not zero effect — it must raise, not report dz=0."""
-    from llm_lab.analysis import power as P
+    from llm_workbench.analysis import power as P
     # m1 passes every prompt, m2 fails every prompt. The binary metric varies across the run
     # (so it survives z-scoring), but the m2-vs-m1 paired difference is a constant -1.
     lines = []
@@ -326,6 +326,6 @@ def test_power_from_run_constant_nonzero_diff_raises(tmp_path):
 
 
 def test_power_from_run_bad_filter_errors(tmp_path):
-    from llm_lab.analysis import power as P
+    from llm_workbench.analysis import power as P
     with pytest.raises(ValueError, match="No metrics match"):
         P.from_run(_write_results(tmp_path / "results.jsonl"), scorers={"nonexistent"})

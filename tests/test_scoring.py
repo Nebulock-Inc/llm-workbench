@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from llm_lab.evals.spec import EvalSpec, ScorerSpec
-from llm_lab.models.mock import MockClient
-from llm_lab.object_types import Response
-from llm_lab.scoring import operational as op
-from llm_lab.scoring import programmatic as pr
-from llm_lab.scoring.base import ScoreContext
-from llm_lab.scoring.judge import LLMJudgeScorer
-from llm_lab.scoring.registry import build_scorers
-from llm_lab.tasks.base import TaskOutput
+from llm_workbench.evals.spec import EvalSpec, ScorerSpec
+from llm_workbench.models.mock import MockClient
+from llm_workbench.object_types import Response
+from llm_workbench.scoring import operational as op
+from llm_workbench.scoring import programmatic as pr
+from llm_workbench.scoring.base import ScoreContext
+from llm_workbench.scoring.judge import LLMJudgeScorer
+from llm_workbench.scoring.registry import build_scorers
+from llm_workbench.tasks.base import TaskOutput
 
 
 def _spec(**over):

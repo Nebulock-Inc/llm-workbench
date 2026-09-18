@@ -6,11 +6,11 @@ from dataclasses import replace
 
 import pytest
 
-from llm_lab.models.base import BaseClient, ModelClient
-from llm_lab.models.factory import make_client
-from llm_lab.models.mock import MockClient
-from llm_lab.models.registry import REGISTRY
-from llm_lab.object_types import GenerationRequest, Usage
+from llm_workbench.models.base import BaseClient, ModelClient
+from llm_workbench.models.factory import make_client
+from llm_workbench.models.mock import MockClient
+from llm_workbench.models.registry import REGISTRY
+from llm_workbench.object_types import GenerationRequest, Usage
 
 
 def test_registry_has_builtin_providers():
@@ -60,9 +60,9 @@ def test_baseclient_soft_fails_on_exception():
 
 
 def test_anthropic_flags_max_tokens_truncation():
-    from llm_lab.config import LabConfig
-    from llm_lab.models.anthropic import AnthropicClient
-    from llm_lab.object_types import Response
+    from llm_workbench.config import LabConfig
+    from llm_workbench.models.anthropic import AnthropicClient
+    from llm_workbench.object_types import Response
 
     client = AnthropicClient.from_config(model_id="anthropic/claude", native="claude", config=LabConfig())
     # empty output that hit the token cap -> flagged (like ollama/openai)
@@ -77,9 +77,9 @@ def test_anthropic_flags_max_tokens_truncation():
 
 
 def test_bedrock_flags_truncation_across_apis():
-    from llm_lab.config import LabConfig
-    from llm_lab.models.bedrock import BedrockClient
-    from llm_lab.object_types import Response
+    from llm_workbench.config import LabConfig
+    from llm_workbench.models.bedrock import BedrockClient
+    from llm_workbench.object_types import Response
 
     client = BedrockClient.from_config(model_id="bedrock/anthropic.claude-x", native="anthropic.claude-x",
                                        config=LabConfig())
@@ -94,9 +94,9 @@ def test_bedrock_flags_truncation_across_apis():
 def test_mantle_forwards_system_and_temperature_but_not_stop():
     import pytest
 
-    from llm_lab.config import LabConfig
-    from llm_lab.models.bedrock_mantle import MantleClient
-    from llm_lab.object_types import GenerationRequest
+    from llm_workbench.config import LabConfig
+    from llm_workbench.models.bedrock_mantle import MantleClient
+    from llm_workbench.object_types import GenerationRequest
 
     client = MantleClient.from_config(model_id="bedrock-mantle/g", native="g", config=LabConfig())
     # `stop` is unsupported by the Responses API — it must be dropped AND warned about.
@@ -114,9 +114,9 @@ def test_mantle_forwards_system_and_temperature_but_not_stop():
 
 
 def test_mantle_chat_kwargs_forwards_system_temperature_and_stop():
-    from llm_lab.config import LabConfig
-    from llm_lab.models.bedrock_mantle import MantleClient
-    from llm_lab.object_types import GenerationRequest
+    from llm_workbench.config import LabConfig
+    from llm_workbench.models.bedrock_mantle import MantleClient
+    from llm_workbench.object_types import GenerationRequest
 
     client = MantleClient.from_config(model_id="bedrock-mantle/g", native="g", config=LabConfig())
     # The Chat Completions surface DOES support `stop` (unlike Responses): no warning, forwarded.
@@ -134,9 +134,9 @@ def test_mantle_chat_kwargs_forwards_system_temperature_and_stop():
 
 
 def test_mantle_annotate_flags_truncation():
-    from llm_lab.config import LabConfig
-    from llm_lab.models.bedrock_mantle import MantleClient
-    from llm_lab.object_types import Response
+    from llm_workbench.config import LabConfig
+    from llm_workbench.models.bedrock_mantle import MantleClient
+    from llm_workbench.object_types import Response
 
     client = MantleClient.from_config(model_id="bedrock-mantle/g", native="g", config=LabConfig())
     # Empty output + incomplete-due-to-token-cap -> flagged like the other providers.
@@ -156,7 +156,7 @@ def test_mantle_annotate_flags_truncation():
 
 
 def test_mantle_endpoint_mismatch_detection():
-    from llm_lab.models.bedrock_mantle import _is_endpoint_mismatch
+    from llm_workbench.models.bedrock_mantle import _is_endpoint_mismatch
 
     # Both observed "wrong endpoint" rejections advance the probe...
     assert _is_endpoint_mismatch(Exception(
@@ -169,9 +169,9 @@ def test_mantle_endpoint_mismatch_detection():
 
 
 def test_mantle_probes_endpoints_until_one_answers_then_caches():
-    from llm_lab.config import LabConfig
-    from llm_lab.models.bedrock_mantle import MantleClient, _ENDPOINT_BY_MODEL
-    from llm_lab.object_types import GenerationRequest, Usage
+    from llm_workbench.config import LabConfig
+    from llm_workbench.models.bedrock_mantle import MantleClient, _ENDPOINT_BY_MODEL
+    from llm_workbench.object_types import GenerationRequest, Usage
 
     _ENDPOINT_BY_MODEL.pop("zai.glm-4.7", None)  # start from an undetected model
     client = MantleClient.from_config(model_id="bedrock-mantle/zai.glm-4.7", native="zai.glm-4.7",
@@ -202,9 +202,9 @@ def test_mantle_probes_endpoints_until_one_answers_then_caches():
 
 
 def test_mantle_real_400_is_not_swallowed_by_the_probe():
-    from llm_lab.config import LabConfig
-    from llm_lab.models.bedrock_mantle import MantleClient, _ENDPOINT_BY_MODEL
-    from llm_lab.object_types import GenerationRequest
+    from llm_workbench.config import LabConfig
+    from llm_workbench.models.bedrock_mantle import MantleClient, _ENDPOINT_BY_MODEL
+    from llm_workbench.object_types import GenerationRequest
 
     _ENDPOINT_BY_MODEL.pop("some.model", None)
     client = MantleClient.from_config(model_id="bedrock-mantle/some.model", native="some.model",

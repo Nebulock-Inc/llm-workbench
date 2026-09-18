@@ -6,12 +6,12 @@ import json
 
 import pytest
 
-from llm_lab.datasets.jsonl import read_jsonl
-from llm_lab.evals.spec import write_spec
-from llm_lab.models.mock import MockClient
-from llm_lab.runner.comparison import run_comparison
-from llm_lab.runner.results import _read_results, load_completed, summarize
-from llm_lab.tasks.base import PromptTemplateTask
+from llm_workbench.datasets.jsonl import read_jsonl
+from llm_workbench.evals.spec import write_spec
+from llm_workbench.models.mock import MockClient
+from llm_workbench.runner.comparison import run_comparison
+from llm_workbench.runner.results import _read_results, load_completed, summarize
+from llm_workbench.tasks.base import PromptTemplateTask
 
 
 def _dataset(tmp_path):
@@ -98,7 +98,7 @@ def test_run_comparison_records_task_errors(tmp_path):
 
 
 def test_custom_task_with_aux_end_to_end(tmp_path):
-    from llm_lab.tasks.loader import load_task
+    from llm_workbench.tasks.loader import load_task
 
     ds = tmp_path / "d.jsonl"
     ds.write_text('{"id": "q1", "input": "hello", "org_name": "Acme"}\n')
@@ -116,8 +116,8 @@ def test_custom_task_with_aux_end_to_end(tmp_path):
 def test_requires_aux_gates_every_scorer(tmp_path):
     # A spec scoped with `requires_aux` must skip ALL its scorers (judge + deterministic)
     # on rows missing the required task-aux value, not just the judge.
-    from llm_lab.evals.spec import load_spec
-    from llm_lab.tasks.loader import load_task
+    from llm_workbench.evals.spec import load_spec
+    from llm_workbench.tasks.loader import load_task
 
     ds = tmp_path / "d.jsonl"
     ds.write_text('{"id": "q1", "output": "ans one", "verdict": "AI"}\n'
@@ -130,7 +130,7 @@ def test_requires_aux_gates_every_scorer(tmp_path):
     )
     out = tmp_path / "runs"
     run_comparison(
-        task=load_task("llm_lab.tasks:ReplayTask"),  # copies record fields into aux
+        task=load_task("llm_workbench.tasks:ReplayTask"),  # copies record fields into aux
         dataset_path=ds, model_ids=["mock/echo"], specs=[load_spec(edir)],
         judge_model="mock/canned:SCORE: 1", out_dir=out,
     )
@@ -145,7 +145,7 @@ def test_requires_aux_gates_every_scorer(tmp_path):
 
 
 def test_summary_and_csv_dedupe_to_latest(tmp_path):
-    from llm_lab.runner.results import summarize, write_csv
+    from llm_workbench.runner.results import summarize, write_csv
 
     def row(ts, score):
         return json.dumps({"model_id": "mock/m1", "record_id": "q0", "input": {}, "output": "",

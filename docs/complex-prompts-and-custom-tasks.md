@@ -26,8 +26,8 @@ When producing the input takes **extra steps** — resolving identifiers, inject
 
 ```python
 # examples/org_scoped_task.py
-from llm_lab.object_types import GenerationRequest
-from llm_lab.tasks.base import TaskOutput
+from llm_workbench.object_types import GenerationRequest
+from llm_workbench.tasks.base import TaskOutput
 
 class OrgScopedTask:
     name = "org-scoped"
@@ -46,7 +46,7 @@ class OrgScopedTask:
 Run it:
 
 ```bash
-uv run llm-lab run compare --task examples.org_scoped_task:OrgScopedTask \
+uv run llm-workbench run compare --task examples.org_scoped_task:OrgScopedTask \
     --dataset pilot.jsonl --model ollama/llama3.1 --eval answer-quality \
     --judge-model bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0
 ```
@@ -58,7 +58,7 @@ A runnable version lives at [`examples/org_scoped_task.py`](../examples/org_scop
 Sometimes you want to run the **judges over a fixed answer** instead of a freshly generated one — to calibrate the judges themselves, to regression-test a rubric or judge-model change, or to re-score a previous run. The built-in `ReplayTask` does exactly this: it ignores the model under test and returns an answer already present in each record, so the full judge/scoring/reporting pipeline runs over frozen inputs.
 
 ```bash
-uv run llm-lab run compare --task llm_lab.tasks:ReplayTask \
+uv run llm-workbench run compare --task llm_workbench.tasks:ReplayTask \
     --dataset calibration.jsonl --model mock/echo --eval-dir evals \
     --judge-model bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0
 ```
@@ -84,7 +84,7 @@ Key points:
 ## What `run(record, client)` receives and returns
 
 - **`record`** — one row of your JSONL dataset, as a dict (all fields, including your own like `org_id`, `org_name`).
-- **`client`** — the model under test (a `ModelClient`). Call `client.generate(GenerationRequest(...))` as many times as your workflow needs. Need a *different* model for a sub-step (e.g. a cheap model to draft, an expensive one to finish)? Build it inside the task with `from llm_lab.models.factory import make_client; make_client("provider/model")`.
+- **`client`** — the model under test (a `ModelClient`). Call `client.generate(GenerationRequest(...))` as many times as your workflow needs. Need a *different* model for a sub-step (e.g. a cheap model to draft, an expensive one to finish)? Build it inside the task with `from llm_workbench.models.factory import make_client; make_client("provider/model")`.
 - **Returns `TaskOutput`** with:
   - `output` (str) — the final answer that the evals score.
   - `prompt` (optional) — the actual prompt sent, saved for debugging.

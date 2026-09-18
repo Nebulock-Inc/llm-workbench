@@ -5,7 +5,7 @@ org scoping into the prompt, calls the model under test, and exposes the resolve
 (and any other derived values) to the eval prompts via `aux`.
 
 Run it with:
-    uv run llm-lab run compare --task examples.org_scoped_task:OrgScopedTask \
+    uv run llm-workbench run compare --task examples.org_scoped_task:OrgScopedTask \
         --dataset examples/org_scoped_dataset.jsonl --model ollama/llama3.1 \
         --eval example-helpfulness --judge-model ollama/llama3.1
 
@@ -16,8 +16,8 @@ examples/org_scoped_dataset.jsonl):
 
 from __future__ import annotations
 
-from llm_lab.object_types import GenerationRequest
-from llm_lab.tasks.base import TaskOutput
+from llm_workbench.object_types import GenerationRequest
+from llm_workbench.tasks.base import TaskOutput
 
 
 class OrgScopedTask:

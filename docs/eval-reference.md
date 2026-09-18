@@ -100,6 +100,6 @@ scorers:
 Validate before running:
 
 ```bash
-uv run llm-lab evals validate path/to/eval        # one eval
-uv run llm-lab evals validate --dir evals_kit     # every eval in a directory
+uv run llm-workbench evals validate path/to/eval        # one eval
+uv run llm-workbench evals validate --dir evals_kit     # every eval in a directory
 ```

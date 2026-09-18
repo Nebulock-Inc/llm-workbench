@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from click.testing import CliRunner
 
-from llm_lab.cli.main import cli
-from llm_lab.evals.spec import write_spec
+from llm_workbench.cli.main import cli
+from llm_workbench.evals.spec import write_spec
 
 
 def test_help_lists_command_groups():

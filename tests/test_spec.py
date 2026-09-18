@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from llm_lab.evals.loader import discover
-from llm_lab.evals.spec import EvalSpecError, load_spec, write_spec
-from llm_lab.evals.template import find_variables, fill_template
+from llm_workbench.evals.loader import discover
+from llm_workbench.evals.spec import EvalSpecError, load_spec, write_spec
+from llm_workbench.evals.template import find_variables, fill_template
 
 
 def _make(dirpath, yaml_text, prompt=None):
