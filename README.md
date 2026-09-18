@@ -323,6 +323,18 @@ llm-workbench models list                 # registered providers + example ids
 llm-workbench models ping ollama/llama3.1  # one short call, prints latency/result
 ```
 
+### Running local models (memory)
+
+`run compare` calls one model at a time, so there is no limit on how many models you compare — with API-backed models (Anthropic, OpenAI, Bedrock) the inference is remote and puts no load on your machine.
+
+The one thing to watch is **local models served through Ollama**. Ollama keeps recently-used models loaded in memory, and because each candidate's answer is scored by the judge right after it is produced, a local candidate and a **local judge** end up resident at the same time. A couple of models together is usually fine; the trouble comes from stacking several large local models — on a memory-constrained machine that can exhaust RAM/VRAM and, on Apple Silicon (where GPU memory is shared with the system), even crash the OS.
+
+If your candidates and judge are all local and memory is tight:
+
+- Use an **API model as the judge** (e.g. `--judge-model anthropic/claude-sonnet-4-5`) so only one heavy model is ever loaded — the least fragile option, and often a better grader.
+- Or cap Ollama's residency: `OLLAMA_MAX_LOADED_MODELS=1` and `OLLAMA_KEEP_ALIVE=0` (llm-workbench passes the latter through). This unloads models promptly at the cost of reloading between calls, so runs are slower but stay within memory.
+- Smoke-test with `--limit 2` before a full sweep, and add models incrementally — resume fills in the rest without redoing completed work.
+
 ## Understanding the Output
 
 Each run directory (`--out-dir`) holds two data files plus, after `analyze`, the analysis artifacts.
