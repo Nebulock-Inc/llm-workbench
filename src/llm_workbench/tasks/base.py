@@ -26,7 +26,7 @@ class Task(Protocol):
 
     # Optional hook (duck-typed; not required by the Protocol): if a task defines
     #   def review_context(self, decision: dict[str, Any]) -> str | None
-    # then `llm-workbench review --task module:Class` calls it per decision and renders the
+    # then `llm-workbench calibrate --task module:Class` calls it per decision and renders the
     # returned text as an extra panel. Use it to surface context that is deliberately
     # NOT persisted to results.jsonl — e.g. re-running a query live so a human reviewer
     # can see its results without customer data ever touching disk. Return None to show

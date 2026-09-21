@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from click.testing import CliRunner
 
 from llm_workbench.cli.main import cli
@@ -11,8 +13,30 @@ from llm_workbench.evals.spec import write_spec
 def test_help_lists_command_groups():
     result = CliRunner().invoke(cli, ["--help"])
     assert result.exit_code == 0
-    for group in ("evals", "models", "run"):
+    for group in ("calibrate", "evals", "models", "run"):
         assert group in result.output
+    # `review` was renamed to `calibrate` — the old command no longer exists.
+    gone = CliRunner().invoke(cli, ["review", "--help"])
+    assert gone.exit_code != 0 and "No such command" in gone.output
+
+
+def test_calibrate_stats(tmp_path):
+    """`calibrate --stats` reports judge-vs-human calibration from a saved review file."""
+    (tmp_path / "results.jsonl").write_text(json.dumps({
+        "model_id": "mock/echo", "record_id": "r1", "input": {}, "output": "ans",
+        "scores": [{"eval": "help", "scorer": "judge", "score": 5}], "timestamp": "2026-01-01T00:00:00",
+    }) + "\n")
+    (tmp_path / "review.jsonl").write_text(json.dumps({
+        "model_id": "mock/echo", "record_id": "r1", "eval": "help", "scorer": "judge",
+        "judge_score": 5, "human_score": 4, "agree": False,
+    }) + "\n")
+
+    result = CliRunner().invoke(cli, ["calibrate", str(tmp_path), "--stats"])
+    assert result.exit_code == 0, result.output
+    assert "calibration" in result.output.lower()
+    # --stats also persists the report alongside the review file.
+    assert (tmp_path / "calibration.json").is_file()
+    assert (tmp_path / "calibration.md").is_file()
 
 
 def test_models_list():

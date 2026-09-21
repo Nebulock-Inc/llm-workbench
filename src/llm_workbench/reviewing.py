@@ -1,14 +1,15 @@
-"""Human review + judge calibration: pure helpers behind `llm-workbench review`.
+"""Human review + judge calibration: pure helpers behind `llm-workbench calibrate`.
 
 Turns a run's `results.jsonl` judge scores into reviewable decisions, persists the
 reviewer's own score per decision, and computes calibration stats (judge vs. human
 bias and agreement). Kept free of I/O prompts so it is unit-testable; the interactive
-loop lives in `cli/commands/review.py`.
+loop lives in `cli/commands/calibrate.py`.
 """
 
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -114,3 +115,58 @@ def calibration_stats(reviews: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if all_pairs:
         rows.append(_row("ALL", all_pairs))
     return rows
+
+
+def _md_table(headers: list[str], rows: list[list[Any]]) -> list[str]:
+    """Render a GitHub markdown table as a list of lines (trailing blank included)."""
+    out = ["| " + " | ".join(headers) + " |",
+           "| " + " | ".join("---" for _ in headers) + " |"]
+    out += ["| " + " | ".join(str(c) for c in row) + " |" for row in rows]
+    out.append("")
+    return out
+
+
+def calibration_markdown(rows: list[dict[str, Any]]) -> str:
+    """Render the calibration_stats() rows as a standalone markdown report."""
+    lines = [
+        "# Judge Calibration Report", "",
+        ("_Judge-vs-human agreement. **Bias** = mean judge − mean human (positive = the judge "
+         "scores higher than the reviewer). Read bias alongside the exact- and within-1-agreement "
+         "rates: a large bias or low agreement is a signal to revise the rubric or judge prompt "
+         "before trusting the run's scores._"), "",
+    ]
+    table_rows = [
+        [f"**{r['eval']}**" if r["eval"] == "ALL" else r["eval"], r["n"],
+         f"{r['mean_judge']:g}", f"{r['mean_human']:g}", f"{r['bias']:+g}",
+         f"{r['exact_agree'] * 100:.0f}%", f"{r['within_1'] * 100:.0f}%"]
+        for r in rows
+    ]
+    lines += _md_table(
+        ["eval", "n", "mean judge", "mean human", "bias (J−H)", "exact agree", "within 1"],
+        table_rows,
+    )
+    return "\n".join(lines)
+
+
+def write_calibration_report(reviews: list[dict[str, Any]], out_dir: str | Path) -> Path | None:
+    """Write `calibration.json` + `calibration.md` for these reviews into out_dir.
+
+    Returns out_dir, or None if there are no scored reviews to report (nothing written).
+    """
+    rows = calibration_stats(reviews)
+    if not rows:
+        return None
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    n_scored = sum(
+        1 for r in reviews
+        if isinstance(r.get("judge_score"), (int, float)) and isinstance(r.get("human_score"), (int, float))
+    )
+    report = {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "n_reviews": n_scored,
+        "calibration": rows,
+    }
+    (out_dir / "calibration.json").write_text(json.dumps(report, indent=2, default=str))
+    (out_dir / "calibration.md").write_text(calibration_markdown(rows))
+    return out_dir
