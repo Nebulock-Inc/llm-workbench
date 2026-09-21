@@ -406,6 +406,31 @@ Options:
 | `--verbose` / `--simple` | `--simple` | Full stats (per-metric mean tables, effect sizes, complete mixed-model summary) vs. headline composite results only. |
 
 
+# Calibrating the Judge
+
+Before you trust the LLM judge's scores, check that they match your own. `llm-workbench calibrate` walks the judge's scored decisions from a run, shows you each input, the model's answer, and the judge's score + reasoning, and records your own score on the same rubric:
+
+```bash
+llm-workbench calibrate runs/experiment-1
+```
+
+It's resumable (already-reviewed decisions are skipped unless `--re-review`) and saves your scores to `<run>/review.jsonl`. At the end — or any time with `--stats` — it reports judge-vs-human **calibration** per eval: **bias** (mean judge − mean human; positive means the judge scores higher than you), plus exact- and within-1-agreement rates. A large bias or low agreement is a signal to revise the rubric or judge prompt before drawing conclusions from a run.
+
+The same table is written to disk as `calibration.json` and `calibration.md` (next to the review file, or `--out-dir`; `--no-report` to skip) so you can commit it alongside a run or drop it into a report. Restrict what you review with `--eval`, `--model`, and `--scorer` (all repeatable). A custom `--task` may expose a `review_context()` hook to show live, non-persisted context (e.g. re-running a query to display its results) while you score.
+
+Options:
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--eval <name>` | all | Restrict to these eval names (repeatable). |
+| `--model <id>` | all | Restrict to these model ids (repeatable). |
+| `--scorer <name>` | `judge` | Which scorer's decisions to review (repeatable). |
+| `--task <module:Class>` | none | Task whose optional `review_context()` supplies live, non-persisted context per decision. |
+| `--review-file <path>` | `<run>/review.jsonl` | Where your scores are stored. |
+| `--re-review` | off | Include decisions already reviewed (default skips them). |
+| `--stats` | off | Just print calibration stats; no interactive review. |
+| `--out-dir <path>` | next to review file | Where to write `calibration.json`/`.md`. |
+| `--report` / `--no-report` | `--report` | Write the calibration report files alongside the console table. |
 
 
 # FAQ

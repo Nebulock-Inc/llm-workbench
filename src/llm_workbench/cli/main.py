@@ -4,12 +4,12 @@ import click
 
 from llm_workbench import __version__
 from llm_workbench.cli.commands.analyze import analyze
+from llm_workbench.cli.commands.calibrate import calibrate
 from llm_workbench.cli.commands.dataset import dataset
 from llm_workbench.cli.commands.evals import evals
 from llm_workbench.cli.commands.init import init
 from llm_workbench.cli.commands.models import models
 from llm_workbench.cli.commands.power import power
-from llm_workbench.cli.commands.review import review
 from llm_workbench.cli.commands.run import run
 
 
@@ -20,12 +20,12 @@ def cli() -> None:
 
 
 cli.add_command(analyze)
+cli.add_command(calibrate)
 cli.add_command(dataset)
 cli.add_command(evals)
 cli.add_command(init)
 cli.add_command(models)
 cli.add_command(power)
-cli.add_command(review)
 cli.add_command(run)
 
 

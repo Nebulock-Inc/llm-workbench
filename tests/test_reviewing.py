@@ -10,6 +10,7 @@ from llm_workbench.reviewing import (
     decision_key,
     judge_decisions,
     load_reviews,
+    write_calibration_report,
 )
 
 
@@ -91,3 +92,27 @@ def test_calibration_stats():
     # E2: pairs (1,3) and (2,2); within_1 = only (2,2) => 0.5
     assert rows["E2"]["n"] == 2 and rows["E2"]["within_1"] == 0.5
     assert rows["ALL"]["n"] == 4
+
+
+def test_write_calibration_report(tmp_path):
+    reviews = [
+        {"eval": "E1", "judge_score": 5, "human_score": 4},
+        {"eval": "E1", "judge_score": 5, "human_score": 5},
+        {"eval": "E2", "judge_score": None, "human_score": 2},  # not counted
+    ]
+    out = write_calibration_report(reviews, tmp_path)
+    assert out == tmp_path
+
+    report = json.loads((tmp_path / "calibration.json").read_text())
+    assert report["n_reviews"] == 2  # the non-numeric judge row is excluded
+    evals = {r["eval"]: r for r in report["calibration"]}
+    assert evals["E1"]["bias"] == 0.5 and "ALL" in evals
+
+    md = (tmp_path / "calibration.md").read_text()
+    assert "Judge Calibration Report" in md and "bias (J−H)" in md and "**ALL**" in md
+
+
+def test_write_calibration_report_no_scored_reviews(tmp_path):
+    # Nothing numeric to calibrate -> no files written, returns None.
+    assert write_calibration_report([{"eval": "E1", "judge_score": None, "human_score": 2}], tmp_path) is None
+    assert not (tmp_path / "calibration.json").exists()

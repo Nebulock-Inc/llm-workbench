@@ -1,10 +1,10 @@
-"""`llm-workbench review` — human review of judge decisions + calibration stats.
+"""`llm-workbench calibrate` — calibrate the LLM judge against human judgment.
 
-Walks the LLM judge's scored decisions from a run's results.jsonl, shows the input, the
-model's answer, and the judge's score + reasoning, and records your own score on the same
-rubric (plus an optional note). Resumable: already-reviewed decisions are skipped unless
---re-review. At the end it prints judge-vs-human calibration (bias, exact & within-1
-agreement) per eval.
+Calibration works by review: walk the judge's scored decisions from a run's results.jsonl,
+show the input, the model's answer, and the judge's score + reasoning, and record your own
+score on the same rubric (plus an optional note). Resumable: already-reviewed decisions are
+skipped unless --re-review. At the end it prints judge-vs-human calibration (bias, exact &
+within-1 agreement) per eval.
 """
 
 from __future__ import annotations
@@ -23,10 +23,11 @@ from llm_workbench.reviewing import (
     decision_key,
     judge_decisions,
     load_reviews,
+    write_calibration_report,
 )
 
 
-def _print_stats(reviews: list[dict]) -> None:
+def _print_stats(reviews: list[dict], *, report_dir=None) -> None:
     rows = calibration_stats(reviews)
     if not rows:
         warn("No scored reviews yet — nothing to calibrate.")
@@ -43,6 +44,11 @@ def _print_stats(reviews: list[dict]) -> None:
         )
     console.print(table)
     teach("bias = mean judge − mean human (positive = judge scores higher than you).")
+
+    if report_dir is not None:
+        written = write_calibration_report(reviews, report_dir)
+        if written:
+            success(f"Wrote {written}/calibration.json and calibration.md")
 
 
 def _render(d: dict, idx: int, total: int, *, full: bool, review_context=None) -> None:
@@ -89,7 +95,7 @@ def _render(d: dict, idx: int, total: int, *, full: bool, review_context=None) -
 _HELP = "enter a number = your score · [a]gree with judge · [s]kip · [o] full answer · [q]uit & save"
 
 
-@click.command("review")
+@click.command("calibrate")
 @click.argument("results", type=click.Path(exists=True))
 @click.option("--eval", "eval_filter", multiple=True, help="Restrict to these eval names (repeatable).")
 @click.option("--model", "model_filter", multiple=True, help="Restrict to these model ids (repeatable).")
@@ -101,14 +107,21 @@ _HELP = "enter a number = your score · [a]gree with judge · [s]kip · [o] full
 @click.option("--review-file", default=None, help="Where reviews are stored. Default: <run>/review.jsonl.")
 @click.option("--re-review", is_flag=True, help="Include decisions already reviewed (default skips them).")
 @click.option("--stats", "stats_only", is_flag=True, help="Just print calibration stats; no interactive review.")
-def review(results, eval_filter, model_filter, scorer_filter, task_spec, review_file, re_review, stats_only):
-    """Review a run's judge decisions and calibrate them to your judgment.
+@click.option("--out-dir", default=None,
+              help="Where to write calibration.json/.md. Default: next to the review file.")
+@click.option("--report/--no-report", default=True, show_default=True,
+              help="Write calibration.json/.md alongside the console table.")
+def calibrate(results, eval_filter, model_filter, scorer_filter, task_spec, review_file, re_review,
+              stats_only, out_dir, report):
+    """Calibrate the LLM judge by reviewing its decisions against your own judgment.
 
-    RESULTS is a run directory or its results.jsonl.
+    Walks the judge's scored decisions, records your score on the same rubric, and reports
+    judge-vs-human bias and agreement. RESULTS is a run directory or its results.jsonl.
     """
     results_path = Path(results)
     run_dir = results_path if results_path.is_dir() else results_path.parent
     review_path = Path(review_file) if review_file else run_dir / "review.jsonl"
+    report_dir = (Path(out_dir) if out_dir else review_path.parent) if report else None
 
     review_context = None
     if task_spec:
@@ -128,7 +141,7 @@ def review(results, eval_filter, model_filter, scorer_filter, task_spec, review_
     existing = load_reviews(review_path)
 
     if stats_only:
-        _print_stats(list(existing.values()))
+        _print_stats(list(existing.values()), report_dir=report_dir)
         return
 
     decisions = judge_decisions(
@@ -146,7 +159,7 @@ def review(results, eval_filter, model_filter, scorer_filter, task_spec, review_
     teach(_HELP)
     if not pending:
         success("Everything is already reviewed.")
-        _print_stats(list(existing.values()))
+        _print_stats(list(existing.values()), report_dir=report_dir)
         return
 
     reviewed_now = 0
@@ -190,4 +203,4 @@ def review(results, eval_filter, model_filter, scorer_filter, task_spec, review_
         full = False
 
     success(f"Reviewed {reviewed_now} decision(s) this session. Saved to {review_path}")
-    _print_stats(list(existing.values()))
+    _print_stats(list(existing.values()), report_dir=report_dir)
