@@ -3,6 +3,7 @@ name = "llm-workbench"
 version = "0.1.0"
 description = "Framework for testing the best LLM for your task"
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.43.86",
