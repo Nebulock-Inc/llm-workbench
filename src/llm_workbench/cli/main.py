@@ -15,8 +15,20 @@ from llm_workbench.cli.commands.run import run
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__, "-V", "--version", prog_name="llm-workbench")
-def cli() -> None:
+@click.option("--provider-module", "provider_modules", multiple=True,
+              help="Import a custom model-provider module before running (repeatable). "
+                   "Set once via LLM_WORKBENCH_PROVIDERS in .env to avoid repeating it.")
+@click.pass_context
+def cli(ctx: click.Context, provider_modules: tuple[str, ...]) -> None:
     """Compare LLMs on your own tasks and evals."""
+    if ctx.resilient_parsing:  # shell completion: skip side effects
+        return
+    from llm_workbench.config import LabConfig
+    from llm_workbench.models.plugins import load_provider_plugins
+
+    modules = [*LabConfig.from_env().provider_modules, *provider_modules]
+    if modules:
+        load_provider_plugins(modules)
 
 
 cli.add_command(analyze)

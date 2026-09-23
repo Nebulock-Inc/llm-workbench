@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 
 from dotenv import find_dotenv, load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class OllamaConfig(BaseModel):
@@ -42,6 +42,7 @@ class LabConfig(BaseModel):
     openai: OpenAICompatConfig = OpenAICompatConfig()
     anthropic: AnthropicConfig = AnthropicConfig()
     default_max_tokens: int = 4096
+    provider_modules: list[str] = Field(default_factory=list)  # custom backend plugin modules
 
     @classmethod
     def from_env(cls) -> "LabConfig":
@@ -68,4 +69,10 @@ class LabConfig(BaseModel):
             anthropic=AnthropicConfig(
                 api_key=env.get("ANTHROPIC_API_KEY") or None,
             ),
+            provider_modules=_split_modules(env.get("LLM_WORKBENCH_PROVIDERS", "")),
         )
+
+
+def _split_modules(raw: str) -> list[str]:
+    """Parse a comma- or whitespace-separated list of module names."""
+    return [m.strip() for m in raw.replace(",", " ").split() if m.strip()]
