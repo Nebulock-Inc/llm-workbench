@@ -89,6 +89,29 @@ def test_evals_new_yes_requires_labels_or_scorer(tmp_path):
     assert created.exit_code != 0
 
 
+def test_evals_new_scaffolds_scorer_params(tmp_path):
+    """Param-bearing scorers get a correctly-nested `params` block that validates."""
+    from llm_workbench.evals.spec import load_spec
+
+    runner = CliRunner()
+    kit = tmp_path / "kit"
+
+    created = runner.invoke(cli, ["evals", "new", "jf", "--scorer", "json_schema", "--yes", "--dir", str(kit)])
+    assert created.exit_code == 0, created.output
+    spec = load_spec(kit / "jf")
+    # schema is nested under params (not a top-level scorer key, which would be rejected)
+    assert "schema" in spec.scorers[0].params
+    assert spec.scorers[0].params["schema"]["type"] == "object"
+
+    created = runner.invoke(cli, ["evals", "new", "rx", "--scorer", "regex", "--yes", "--dir", str(kit)])
+    assert created.exit_code == 0, created.output
+    assert "pattern" in load_spec(kit / "rx").scorers[0].params
+
+    # validate confirms the scaffolded evals load
+    validated = runner.invoke(cli, ["evals", "validate", "--dir", str(kit)])
+    assert validated.exit_code == 0 and "2/2 valid" in validated.output
+
+
 def test_init_scaffolds_starter(tmp_path):
     runner = CliRunner()
     result = runner.invoke(cli, ["init", str(tmp_path)])

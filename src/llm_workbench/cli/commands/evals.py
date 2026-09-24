@@ -96,6 +96,47 @@ def _parse_scorers(items: list[str]) -> list[dict[str, Any]]:
     return out
 
 
+# Scorers whose runtime behavior is driven by `params` (nested UNDER the scorer — a
+# top-level key like `schema:`/`pattern:` is rejected by ScorerSpec). The wizard
+# scaffolds a correctly-nested params block so authors edit a valid shell rather than
+# guessing the shape (a common mistake, and a copy-paste trap in hand-written evals).
+_PARAM_SCORER_STUBS: dict[str, dict[str, Any]] = {
+    "regex": {"pattern": "REPLACE_WITH_YOUR_REGEX"},
+    "json_schema": {"schema": {"type": "object", "properties": {}, "required": []}},
+    "numeric_tolerance": {"atol": 0.0},
+}
+
+
+def _scaffold_scorer_params(scorers: list[dict[str, Any]], interactive: bool) -> list[str]:
+    """Fill in the `params` block param-bearing scorers need, correctly nested.
+
+    Prompts for the simple scalar params when interactive; otherwise (or for the
+    structured json_schema) inserts a placeholder stub. Returns the scorer types left
+    as stubs that still need hand-editing before the eval will do anything useful.
+    """
+    from copy import deepcopy
+
+    todo: list[str] = []
+    for entry in scorers:
+        typ = entry["type"]
+        if entry.get("params") or typ not in _PARAM_SCORER_STUBS:
+            continue
+        if interactive and typ == "regex":
+            entry["params"] = {"pattern": click.prompt("  regex pattern for this check")}
+        elif interactive and typ == "numeric_tolerance":
+            raw = click.prompt("  absolute tolerance for this check (e.g. 0.01)", default="0.0")
+            try:
+                entry["params"] = {"atol": float(raw)}
+            except ValueError:
+                warn("  not a number — leaving a 0.0 placeholder to edit")
+                entry["params"] = {"atol": 0.0}
+                todo.append(typ)
+        else:  # json_schema, or any param scorer in a non-interactive run
+            entry["params"] = deepcopy(_PARAM_SCORER_STUBS[typ])
+            todo.append(typ)
+    return todo
+
+
 @click.group()
 def evals() -> None:
     """Create, validate, and list evals.
@@ -262,6 +303,10 @@ def new(name, eval_dir, description, labels_preset, cli_vars, cli_scorers, force
                     break
                 warn("A deterministic eval needs at least one check — enter one, or Ctrl-C to abort.")
 
+    # Scaffold the correctly-nested `params` block for scorers that need one
+    # (regex/json_schema/numeric_tolerance), prompting for scalar params when interactive.
+    scorer_todo = _scaffold_scorer_params(scorers, interactive)
+
     # --- Preview + confirm ------------------------------------------------
     yaml_text, prompt_text = render_spec_files(
         name=name, description=description, labels=labels, prompt=prompt, scorers=scorers,
@@ -288,6 +333,16 @@ def new(name, eval_dir, description, labels_preset, cli_vars, cli_scorers, force
     else:
         success(f"Created {dest}/eval.yaml")
         console.print(f"  deterministic  scorers={len(spec.scorers)}")
+
+    if scorer_todo:
+        eval_path = (dest / "eval.yaml").resolve()
+        teach(
+            f"Some scorers were scaffolded with placeholder params you still need to fill in "
+            f"({', '.join(sorted(set(scorer_todo)))}):\n"
+            f"  edit the values under each scorer's `params:` in {eval_path}\n"
+            "  (e.g. json_schema → params.schema, regex → params.pattern). Keep them nested "
+            "under `params` — a top-level key there is rejected."
+        )
 
     validate_cmd = f"`llm-workbench evals validate --dir {eval_dir}`"
     prompt_path = dest / "prompt.md"
