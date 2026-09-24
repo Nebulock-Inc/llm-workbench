@@ -66,3 +66,21 @@ class OllamaClient(BaseClient):
             return replace(response, error="truncated before final answer (raise max_tokens or set OLLAMA_THINK=false)")
         return response
 
+    def availability_warning(self) -> str | None:
+        """Ask Ollama what it has pulled (/api/tags) and flag if `native` is missing.
+
+        A missing model otherwise surfaces only as a 404 on every row mid-sweep."""
+        try:
+            resp = requests.get(f"{self.cfg.base_url}/api/tags", timeout=self.cfg.connect_timeout)
+            resp.raise_for_status()
+            names = {m.get("name") for m in resp.json().get("models", [])}
+        except requests.exceptions.RequestException as exc:
+            return (f"Could not reach Ollama at {self.cfg.base_url} to check availability "
+                    f"({type(exc).__name__}); is it running? Set OLLAMA_BASE_URL to change the host.")
+        # Ollama defaults a tag-less name to ':latest'.
+        if self.native in names or (":" not in self.native and f"{self.native}:latest" in names):
+            return None
+        available = ", ".join(sorted(n for n in names if n)) or "(none)"
+        return (f"Model {self.native!r} is not pulled in Ollama at {self.cfg.base_url}; "
+                f"every call will 404. Run `ollama pull {self.native}`. Available: {available}")
+

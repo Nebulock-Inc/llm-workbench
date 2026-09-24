@@ -104,6 +104,24 @@ def test_json_schema():
     assert pr.JSONSchemaValid(sp).score(_ctx(output="not json")).passed is False
 
 
+def test_json_schema_tolerates_code_fence():
+    sp = ScorerSpec(type="json_schema", params={"schema": {"type": "object", "required": ["relevant"]}})
+    fenced = '```json\n{\n  "relevant": "Yes"\n}\n```'
+    assert pr.JSONSchemaValid(sp).score(_ctx(output=fenced)).passed is True
+    # bare ``` fence (no language) and surrounding whitespace also tolerated
+    assert pr.JSONSchemaValid(sp).score(_ctx(output='\n```\n{"relevant": "No"}\n```\n')).passed is True
+    # schema is still enforced on the unwrapped body
+    assert pr.JSONSchemaValid(sp).score(_ctx(output='```json\n{"other": 1}\n```')).passed is False
+
+
+def test_json_schema_strict_when_strip_fence_false():
+    sp = ScorerSpec(type="json_schema", params={"strip_fence": False,
+                                                "schema": {"type": "object", "required": ["relevant"]}})
+    res = pr.JSONSchemaValid(sp).score(_ctx(output='```json\n{"relevant": "Yes"}\n```'))
+    assert res.passed is False
+    assert "not valid JSON" in res.reasoning
+
+
 def test_numeric_tolerance():
     sp = ScorerSpec(type="numeric_tolerance", expected_field="expected", params={"atol": 0.5})
     assert pr.NumericTolerance(sp).score(_ctx(output="about 4.2", record={"expected": 4})).passed is True

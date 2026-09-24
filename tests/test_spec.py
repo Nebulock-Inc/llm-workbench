@@ -54,6 +54,29 @@ def test_prompt_without_labels_rejected(tmp_path):
         load_spec(d)
 
 
+def test_scorer_stray_key_points_to_params(tmp_path):
+    # 'schema' at the scorer's top level (should be under params) is the common mistake;
+    # the error should name the stray key and point to 'params', not surface a raw pydantic dump.
+    d = _make(tmp_path / "e", "name: Q\nscorers:\n  - type: json_schema\n    schema:\n      type: object\n")
+    with pytest.raises(EvalSpecError, match="under 'params'"):
+        load_spec(d)
+
+
+def test_scorer_params_accepted(tmp_path):
+    d = _make(
+        tmp_path / "e",
+        "name: Q\nscorers:\n  - type: json_schema\n    params:\n      schema:\n        type: object\n",
+    )
+    spec = load_spec(d)
+    assert spec.scorers[0].params["schema"] == {"type": "object"}
+
+
+def test_scorer_missing_type_rejected(tmp_path):
+    d = _make(tmp_path / "e", "name: Q\nscorers:\n  - expected_field: gold\n")
+    with pytest.raises(EvalSpecError, match="missing required key 'type'"):
+        load_spec(d)
+
+
 def test_literal_empty_braces_rejected(tmp_path):
     d = _make(tmp_path / "e", "name: Q\nlabels:\n  a: 1\nprompt: 'has {} braces'\n")
     with pytest.raises(EvalSpecError, match="literal"):

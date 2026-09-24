@@ -109,7 +109,8 @@ def evals() -> None:
     "new",
     epilog="Examples:\n"
     "  llm-workbench evals new                       # full guided wizard\n"
-    "  llm-workbench evals new answer-quality --labels 1-5 --yes   # non-interactive (CI)\n",
+    "  llm-workbench evals new answer-quality --labels 1-5 --yes           # LLM judge (CI)\n"
+    "  llm-workbench evals new exact --scorer exact_match:expected --yes   # deterministic (CI)\n",
 )
 @click.argument("name", required=False)
 @click.option("--dir", "eval_dir", default="evals_kit", show_default=True, help="Folder to create the eval in.")
@@ -119,23 +120,34 @@ def evals() -> None:
 @click.option("--var", "cli_vars", multiple=True, help="Judge variable name (repeatable).")
 @click.option("--scorer", "cli_scorers", multiple=True, help="Programmatic scorer: 'type' or 'type:field' (repeatable).")
 @click.option("--force", is_flag=True, help="Overwrite an existing eval folder.")
-@click.option("--yes", is_flag=True, help="Non-interactive: accept defaults (requires NAME and --labels).")
+@click.option("--yes", is_flag=True,
+              help="Non-interactive: accept defaults (requires NAME and --labels and/or --scorer).")
 def new(name, eval_dir, description, labels_preset, cli_vars, cli_scorers, force, yes):
-    """Create a new eval, walking you through the rubric and judge prompt."""
+    """Create a new eval, walking you through either an LLM judge or deterministic checks."""
     interactive = not yes
+
+    # A step counter so headings renumber cleanly whichever branch we take
+    # (a deterministic eval skips the rubric/variables/instructions steps).
+    _step = 0
+
+    def step(title: str) -> None:
+        nonlocal _step
+        _step += 1
+        heading(f"{_step}. {title}")
 
     if interactive:
         info_panel(
-            "An eval scores your model's answers. It has two parts:\n"
-            "  1. a RUBRIC — the scale an LLM 'judge' scores each answer on (e.g. 1-5)\n"
-            "  2. a PROMPT — what the judge reads: the question, the answer, and any context\n"
-            "You can also add deterministic checks (exact match, regex, JSON-valid) that need no model.\n"
-            "We'll build these step by step, preview the files, and validate before saving.",
+            "An eval scores your model's answers. It can score them two ways:\n"
+            "  • an LLM JUDGE — a model reads each answer and rates it on a RUBRIC (a scale like 1-5),\n"
+            "    guided by a PROMPT you write (the question, the answer, any context)\n"
+            "  • DETERMINISTIC checks — code compares the answer to your dataset (exact match, regex,\n"
+            "    JSON-valid, numeric tolerance): no model, fast, free, and exact\n"
+            "You'll pick which this eval uses. We'll build it step by step, preview, and validate before saving.",
             title="Creating a new eval",
         )
 
     # --- Name -------------------------------------------------------------
-    heading("1. Name")
+    step("Name")
     if not name:
         if yes:
             raise click.ClickException("NAME is required with --yes.")
@@ -148,78 +160,118 @@ def new(name, eval_dir, description, labels_preset, cli_vars, cli_scorers, force
         raise click.ClickException("eval already exists")
 
     # --- Description ------------------------------------------------------
-    heading("2. Description")
+    step("Description")
     if description is None:
         teach("One line describing the quality this eval measures. Shown in `evals list`.")
         description = "" if yes else click.prompt("Description", default="", show_default=False)
 
-    # --- Rubric -----------------------------------------------------------
-    heading("3. Rubric")
-    if labels_preset is None:
-        teach(
-            "Pick the scoring scale:\n"
-            "  • 1-5    — graded quality; use when answers vary by degree\n"
-            "  • binary — pass/fail (1/0); use for a yes-or-no property (e.g. 'refused correctly')\n"
-            "  • custom — define your own score → description levels"
-        )
-        labels_preset = click.prompt("Scale", type=click.Choice(["1-5", "binary", "custom"]), default="1-5")
-    labels = _build_rubric(labels_preset, interactive)
-    if interactive:
-        console.print(_rubric_table(labels))
-
-    # --- Variables --------------------------------------------------------
-    heading("4. Judge variables")
-    if cli_vars:
-        variables = list(cli_vars)
+    # --- Eval type --------------------------------------------------------
+    # Decide up front whether this eval uses an LLM judge, deterministic checks,
+    # or both, then only ask the questions that apply. Non-interactive runs infer
+    # the type from which flags were passed (--labels => judge, --scorer => checks).
+    step("Eval type")
+    if labels_preset is not None:
+        wants_judge, wants_scorers = True, bool(cli_scorers)
+    elif cli_scorers:
+        wants_judge, wants_scorers = False, True
     elif yes:
-        variables = ["input", "output"]
+        raise click.ClickException(
+            "With --yes, pass --labels (LLM judge) and/or --scorer (deterministic checks) to say what the eval does."
+        )
     else:
         teach(
-            "Variables are placeholders the judge prompt fills in for each test case at run time.\n"
-            "  • input  — the question/prompt given to the model under test\n"
-            "  • output — the model's answer being judged\n"
-            "Add more if the judge needs them (e.g. 'context', 'expected'). Each must appear in the prompt as {name}."
+            "Two ways to score answers — pick what this eval uses:\n"
+            "  • judge         — an LLM reads each answer and scores it on a rubric; use for qualities\n"
+            "                    you can't check mechanically (helpfulness, tone, faithfulness of prose)\n"
+            "  • deterministic — code checks the answer against your dataset (exact match, regex,\n"
+            "                    JSON-valid, numeric tolerance); no model, fast, free, exact\n"
+            "  • both          — run deterministic checks alongside an LLM judge"
         )
-        raw = click.prompt("Variables (comma-separated)", default="input, output")
-        variables = [v.strip() for v in raw.split(",") if v.strip()]
+        choice = click.prompt("Eval type", type=click.Choice(["judge", "deterministic", "both"]), default="judge")
+        wants_judge = choice in ("judge", "both")
+        wants_scorers = choice in ("deterministic", "both")
 
-    # --- Judge instructions -----------------------------------------------
-    heading("5. Judge instructions")
-    instructions: str | None = None
+    labels: dict[str, float] = {}
+    prompt = ""
     wrote_instructions = False
-    if interactive:
-        teach(
-            "The judge prompt needs instructions telling the judge WHAT to evaluate and how to apply the\n"
-            "rubric. Two options:\n"
-            "  • write a one-line instruction now (the {var} blocks are appended automatically), or\n"
-            "  • skip and edit prompt.md yourself after the files are written — we'll print the path."
-        )
-        if click.confirm("Write the judge instructions now?", default=True):
-            instructions = click.prompt("Judge instructions")
-            wrote_instructions = bool(instructions.strip())
-    prompt = _build_prompt(variables, instructions)
 
-    # --- Programmatic scorers (optional) ----------------------------------
-    heading("6. Programmatic checks (optional)")
-    scorers = _parse_scorers(list(cli_scorers))
-    if interactive and not scorers:
-        teach(
-            "Optional deterministic checks that run without an LLM and compare the output to a field in\n"
-            "your dataset. Examples: exact_match:expected, contains, regex, json_schema, numeric_tolerance:expected.\n"
-            "Use 'type' or 'type:field'. Leave blank to skip."
-        )
-        raw = click.prompt("Scorers (comma-separated)", default="", show_default=False)
-        scorers = _parse_scorers([s.strip() for s in raw.split(",") if s.strip()])
+    if wants_judge:
+        # --- Rubric -------------------------------------------------------
+        step("Rubric")
+        if labels_preset is None:
+            teach(
+                "Pick the scoring scale:\n"
+                "  • 1-5    — graded quality; use when answers vary by degree\n"
+                "  • binary — pass/fail (1/0); use for a yes-or-no property (e.g. 'refused correctly')\n"
+                "  • custom — define your own score → description levels"
+            )
+            labels_preset = click.prompt("Scale", type=click.Choice(["1-5", "binary", "custom"]), default="1-5")
+        labels = _build_rubric(labels_preset, interactive)
+        if interactive:
+            console.print(_rubric_table(labels))
+
+        # --- Variables ----------------------------------------------------
+        step("Judge variables")
+        if cli_vars:
+            variables = list(cli_vars)
+        elif yes:
+            variables = ["input", "output"]
+        else:
+            teach(
+                "Variables are placeholders the judge prompt fills in for each test case at run time.\n"
+                "  • input  — the question/prompt given to the model under test\n"
+                "  • output — the model's answer being judged\n"
+                "Add more if the judge needs them (e.g. 'context', 'expected'). Each must appear in the prompt as {name}."
+            )
+            raw = click.prompt("Variables (comma-separated)", default="input, output")
+            variables = [v.strip() for v in raw.split(",") if v.strip()]
+
+        # --- Judge instructions -------------------------------------------
+        step("Judge instructions")
+        instructions: str | None = None
+        if interactive:
+            teach(
+                "The judge prompt needs instructions telling the judge WHAT to evaluate and how to apply the\n"
+                "rubric. Two options:\n"
+                "  • write a one-line instruction now (the {var} blocks are appended automatically), or\n"
+                "  • skip and edit prompt.md yourself after the files are written — we'll print the path."
+            )
+            if click.confirm("Write the judge instructions now?", default=True):
+                instructions = click.prompt("Judge instructions")
+                wrote_instructions = bool(instructions.strip())
+        prompt = _build_prompt(variables, instructions)
+
+    # --- Deterministic checks ---------------------------------------------
+    scorers: list[dict[str, Any]] = []
+    if wants_scorers:
+        # Required when this is a deterministic-only eval (an eval must define
+        # something to score with); optional add-on when a judge is also present.
+        required = not wants_judge
+        step("Deterministic checks" if required else "Deterministic checks (optional)")
+        scorers = _parse_scorers(list(cli_scorers))
+        if interactive and not scorers:
+            teach(
+                "Checks run without an LLM and compare the output to a field in your dataset.\n"
+                "Examples: exact_match:expected, contains, regex, json_schema, numeric_tolerance:expected.\n"
+                "Use 'type' or 'type:field', comma-separated." + ("" if required else " Leave blank to skip.")
+            )
+            while True:
+                raw = click.prompt("Scorers (comma-separated)", default="", show_default=False)
+                scorers = _parse_scorers([s.strip() for s in raw.split(",") if s.strip()])
+                if scorers or not required:
+                    break
+                warn("A deterministic eval needs at least one check — enter one, or Ctrl-C to abort.")
 
     # --- Preview + confirm ------------------------------------------------
     yaml_text, prompt_text = render_spec_files(
         name=name, description=description, labels=labels, prompt=prompt, scorers=scorers,
     )
     if interactive:
-        heading("7. Preview")
+        step("Preview")
         console.print(Syntax(yaml_text, "yaml", theme="ansi_dark", word_wrap=True))
         console.print()
-        info_panel(prompt_text.rstrip(), title=f"{dest}/prompt.md")
+        if prompt_text.strip():
+            info_panel(prompt_text.rstrip(), title=f"{dest}/prompt.md")
         if not click.confirm(f"\nWrite these to {dest}/ ?", default=True):
             warn("Aborted — nothing written.")
             return
@@ -230,16 +282,24 @@ def new(name, eval_dir, description, labels_preset, cli_vars, cli_scorers, force
     except EvalSpecError as exc:
         raise click.ClickException(str(exc)) from exc
 
-    success(f"Created {dest}/eval.yaml and prompt.md")
-    console.print(f"  scale=1-{int(spec.max_label_score)}  vars={list(spec.variables)}  scorers={len(spec.scorers)}")
+    if spec.has_judge:
+        success(f"Created {dest}/eval.yaml and prompt.md")
+        console.print(f"  scale=1-{int(spec.max_label_score)}  vars={list(spec.variables)}  scorers={len(spec.scorers)}")
+    else:
+        success(f"Created {dest}/eval.yaml")
+        console.print(f"  deterministic  scorers={len(spec.scorers)}")
+
+    validate_cmd = f"`llm-workbench evals validate --dir {eval_dir}`"
     prompt_path = dest / "prompt.md"
-    if wrote_instructions:
-        teach(f"Next: refine the wording in {prompt_path}, then `llm-workbench evals validate --dir {eval_dir}`.")
+    if not spec.has_judge:
+        teach(f"Next: run {validate_cmd} to confirm the eval loads.")
+    elif wrote_instructions:
+        teach(f"Next: refine the wording in {prompt_path}, then run {validate_cmd}.")
     else:
         teach(
             f"You skipped writing instructions — the judge prompt is a placeholder. Write it now at:\n"
             f"  {prompt_path.resolve()}\n"
-            f"Then run `llm-workbench evals validate --dir {eval_dir}`."
+            f"Then run {validate_cmd}."
         )
 
 

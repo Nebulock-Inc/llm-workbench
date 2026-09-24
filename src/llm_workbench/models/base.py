@@ -36,6 +36,7 @@ class ModelClient(Protocol):
 
     def generate(self, request: GenerationRequest) -> Response: ...
     def call(self, prompt: str) -> str: ...
+    def availability_warning(self) -> str | None: ...
 
 
 class BaseClient(ABC):
@@ -78,6 +79,15 @@ class BaseClient(ABC):
         """Provider hook to flag soft problems (e.g. truncation) after a Response
         is built. Default: unchanged. Overrides must not raise."""
         return response
+
+    def availability_warning(self) -> str | None:
+        """Optional pre-flight check, run once per client before the sweep starts.
+
+        Return a human-readable warning if the model looks unavailable (e.g. not
+        pulled, endpoint unreachable), else None. Providers that can cheaply list
+        what's available override this; the default assumes availability. Must not
+        raise — a check that can't run should return None (or a warning), never blow up."""
+        return None
 
     def call(self, prompt: str) -> str:
         return self.generate(GenerationRequest(prompt=prompt)).text

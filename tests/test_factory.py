@@ -229,3 +229,66 @@ def test_annotate_hook_runs_after_generate():
 
     resp = Flag("mock/flag").generate(GenerationRequest(prompt="x"))
     assert resp.error == "empty"
+
+
+class _FakeTagsResponse:
+    """Stand-in for requests.Response from Ollama's /api/tags."""
+
+    def __init__(self, names):
+        self._names = names
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"models": [{"name": n} for n in self._names]}
+
+
+def _ollama_client():
+    from llm_workbench.config import LabConfig
+    from llm_workbench.models.ollama import OllamaClient
+    return OllamaClient.from_config(model_id="ollama/mistral:latest", native="mistral:latest",
+                                    config=LabConfig())
+
+
+def test_ollama_warns_when_model_not_pulled(monkeypatch):
+    import llm_workbench.models.ollama as ollama_mod
+
+    monkeypatch.setattr(ollama_mod.requests, "get",
+                        lambda *a, **k: _FakeTagsResponse(["llama3.1:latest", "qwen3:latest"]))
+    warning = _ollama_client().availability_warning()
+    assert warning is not None
+    assert "not pulled" in warning
+    assert "ollama pull mistral:latest" in warning
+    assert "llama3.1:latest" in warning  # lists what IS available
+
+
+def test_ollama_quiet_when_model_present(monkeypatch):
+    import llm_workbench.models.ollama as ollama_mod
+
+    monkeypatch.setattr(ollama_mod.requests, "get",
+                        lambda *a, **k: _FakeTagsResponse(["mistral:latest", "qwen3:latest"]))
+    assert _ollama_client().availability_warning() is None
+
+
+def test_ollama_defaults_tagless_name_to_latest(monkeypatch):
+    import llm_workbench.models.ollama as ollama_mod
+    from llm_workbench.config import LabConfig
+    from llm_workbench.models.ollama import OllamaClient
+
+    monkeypatch.setattr(ollama_mod.requests, "get",
+                        lambda *a, **k: _FakeTagsResponse(["mistral:latest"]))
+    client = OllamaClient.from_config(model_id="ollama/mistral", native="mistral", config=LabConfig())
+    assert client.availability_warning() is None  # 'mistral' matches 'mistral:latest'
+
+
+def test_ollama_warns_when_unreachable(monkeypatch):
+    import llm_workbench.models.ollama as ollama_mod
+
+    def boom(*a, **k):
+        raise ollama_mod.requests.exceptions.ConnectionError("refused")
+
+    monkeypatch.setattr(ollama_mod.requests, "get", boom)
+    warning = _ollama_client().availability_warning()
+    assert warning is not None
+    assert "Could not reach Ollama" in warning
