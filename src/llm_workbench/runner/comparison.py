@@ -36,6 +36,7 @@ def run_comparison(
     resume: bool = True,
     limit: int | None = None,
     on_event: Callable[[str, str, str], None] | None = None,
+    on_warning: Callable[[str], None] | None = None,
 ) -> Path:
     """Run every model over every record, score with each eval, save results."""
     config = config or LabConfig.from_env()
@@ -55,6 +56,15 @@ def run_comparison(
     judge_client = make_client(judge_model, config) if judge_model else None
     clients = {model_id: make_client(model_id, config) for model_id in model_ids}
     scorers_by_eval = {s.name: build_scorers(s, include_judge=judge_model is not None) for s in specs}
+
+    # Pre-flight: warn (once) about models that look unavailable, before the sweep
+    # spends every row on a call that's going to fail. Providers that can't check
+    # cheaply return None here. This is the only place the runner makes a network
+    # call before running records.
+    if on_warning:
+        for client in ([judge_client] if judge_client else []) + list(clients.values()):
+            if (msg := client.availability_warning()) is not None:
+                on_warning(msg)
 
     for model_id in model_ids:
         client = clients[model_id]

@@ -23,6 +23,18 @@ def _first_number(text: str) -> float | None:
     return float(m.group(0)) if m else None
 
 
+# ```json … ``` (or a bare ``` … ```) that instruction-tuned models wrap output in.
+# Matches only when a fence encloses the whole (stripped) text, so we don't mangle
+# output that legitimately contains a fence in the middle.
+_FENCE = re.compile(r"\A```[^\n`]*\n(?P<body>.*)\n```\Z", re.DOTALL)
+
+
+def _strip_code_fence(text: str) -> str:
+    """Remove a single surrounding markdown code fence, if the whole text is one."""
+    m = _FENCE.match(text.strip())
+    return m.group("body") if m else text
+
+
 class ExactMatch:
     def __init__(self, spec: "ScorerSpec") -> None:
         self.spec = spec
@@ -74,8 +86,12 @@ class JSONSchemaValid:
         self.name = "json_schema"
 
     def score(self, ctx: ScoreContext) -> ScoreResult:
+        # Models routinely wrap JSON in a ```json … ``` fence; tolerate that by default
+        # so we measure "is this valid JSON" not "did it skip the markdown". Set
+        # params.strip_fence: false to require bare JSON.
+        text = ctx.output if self.spec.params.get("strip_fence") is False else _strip_code_fence(ctx.output)
         try:
-            data = json.loads(ctx.output)
+            data = json.loads(text)
         except json.JSONDecodeError as exc:
             return ScoreResult(scorer=self.name, score=0.0, passed=False, reasoning=f"not valid JSON: {exc}")
         schema = self.spec.params.get("schema")

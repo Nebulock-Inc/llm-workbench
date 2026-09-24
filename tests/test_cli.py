@@ -66,6 +66,29 @@ def test_evals_new_list_validate(tmp_path):
     assert validated.exit_code == 0 and "1/1 valid" in validated.output
 
 
+def test_evals_new_deterministic(tmp_path):
+    """A --scorer-only, no --labels eval is deterministic: eval.yaml, no prompt.md, valid."""
+    runner = CliRunner()
+    kit = tmp_path / "kit"
+
+    created = runner.invoke(
+        cli, ["evals", "new", "Exact", "--scorer", "exact_match:expected", "--yes", "--dir", str(kit)]
+    )
+    assert created.exit_code == 0, created.output
+    assert (kit / "exact" / "eval.yaml").is_file()
+    assert not (kit / "exact" / "prompt.md").exists()
+
+    validated = runner.invoke(cli, ["evals", "validate", "--dir", str(kit)])
+    assert validated.exit_code == 0 and "1/1 valid" in validated.output
+
+
+def test_evals_new_yes_requires_labels_or_scorer(tmp_path):
+    """--yes with neither --labels nor --scorer fails rather than assuming a judge."""
+    runner = CliRunner()
+    created = runner.invoke(cli, ["evals", "new", "Nope", "--yes", "--dir", str(tmp_path / "kit")])
+    assert created.exit_code != 0
+
+
 def test_init_scaffolds_starter(tmp_path):
     runner = CliRunner()
     result = runner.invoke(cli, ["init", str(tmp_path)])

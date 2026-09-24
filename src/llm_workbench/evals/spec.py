@@ -136,6 +136,24 @@ def load_spec(path: str | Path) -> EvalSpec:
             raise EvalSpecError(f"{path}: label {label!r} must map to a number, got {score!r}.")
 
     scorers = raw.get("scorers") or []
+    if not isinstance(scorers, list):
+        raise EvalSpecError(f"{path}: 'scorers' must be a list of scorer entries.")
+    allowed_scorer_keys = set(ScorerSpec.model_fields)
+    for i, s in enumerate(scorers):
+        if not isinstance(s, dict):
+            raise EvalSpecError(f"{path}: scorer #{i + 1} must be a mapping with a 'type' key, got {s!r}.")
+        if "type" not in s:
+            raise EvalSpecError(f"{path}: scorer #{i + 1} is missing required key 'type'.")
+        # A scorer entry only carries type/expected_field/params; scorer-specific config
+        # (schema, pattern, substring, atol, ...) is read from params, so a stray top-level
+        # key is almost always config that should have been nested under 'params'.
+        if stray := sorted(set(s) - allowed_scorer_keys):
+            raise EvalSpecError(
+                f"{path}: scorer {s['type']!r} has unsupported key(s): {', '.join(stray)}. "
+                f"A scorer takes only {', '.join(sorted(allowed_scorer_keys))}; nest scorer-specific "
+                f"config (e.g. schema, pattern, substring, atol) under 'params'."
+            )
+
     has_judge = bool(labels) and bool(prompt.strip())
     # Specific diagnostics first, generic catch-all last.
     if labels and not prompt.strip():
