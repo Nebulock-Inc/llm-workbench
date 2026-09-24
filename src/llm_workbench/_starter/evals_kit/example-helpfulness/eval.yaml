@@ -1,0 +1,11 @@
+name: Helpfulness
+description: >-
+  Judges whether the response helpfully and directly answers the user's question.
+direction: MAXIMIZE
+labels:
+  "Directly and completely answers the question with accurate, actionable detail.": 5
+  "Answers the question but misses some detail or nuance.": 4
+  "Partially answers; noticeable gaps or vagueness.": 3
+  "Barely addresses the question.": 2
+  "Does not answer the question at all.": 1
+prompt_file: prompt.md
