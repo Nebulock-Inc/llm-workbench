@@ -47,6 +47,7 @@ class RunResult:
     usage: dict[str, Any]
     error: str | None
     scores: list[ScoreRow]
+    aux: dict[str, Any] = field(default_factory=dict)  # task-provided telemetry (TaskOutput.aux)
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
@@ -99,7 +100,7 @@ def write_csv(out_dir: str | Path) -> Path:
     rows: list[dict[str, Any]] = []
     for r in dedupe_latest(_read_results(out_dir / "results.jsonl"), successful_only=True):
         base = {"model_id": r["model_id"], "record_id": r["record_id"],
-                "latency_s": r["latency_s"]}
+                "output": r.get("output"), "latency_s": r["latency_s"]}
         scores = r.get("scores") or []
         if scores:
             for s in scores:
@@ -109,7 +110,7 @@ def write_csv(out_dir: str | Path) -> Path:
             rows.append({**base, "eval": None, "scorer": None, "score": None,
                          "label": None, "passed": None, "score_error": None})
     cols = ["model_id", "record_id", "eval", "scorer", "score", "label", "passed",
-            "latency_s", "score_error"]
+            "output", "latency_s", "score_error"]
     csv_path = out_dir / "results.csv"
     with csv_path.open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=cols)
