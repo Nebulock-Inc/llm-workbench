@@ -106,6 +106,7 @@ def run_comparison(
                         "total_tokens": resp.usage.total_tokens} if resp else {}),
                 error=resp.error if resp else None,
                 scores=score_rows,
+                aux=out.aux or {},
             ).to_dict())
             if on_event:
                 on_event("done", model_id, rid)
