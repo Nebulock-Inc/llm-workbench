@@ -18,17 +18,23 @@ from llm_workbench.cli.commands.run import run
 @click.option("--provider-module", "provider_modules", multiple=True,
               help="Import a custom model-provider module before running (repeatable). "
                    "Set once via LLM_WORKBENCH_PROVIDERS in .env to avoid repeating it.")
+@click.option("--scorer-module", "scorer_modules", multiple=True,
+              help="Import a custom scorer module before running so its register_scorer(...) "
+                   "types resolve in eval.yaml (repeatable). Applies to run and evals validate.")
 @click.pass_context
-def cli(ctx: click.Context, provider_modules: tuple[str, ...]) -> None:
+def cli(ctx: click.Context, provider_modules: tuple[str, ...], scorer_modules: tuple[str, ...]) -> None:
     """Compare LLMs on your own tasks and evals."""
     if ctx.resilient_parsing:  # shell completion: skip side effects
         return
     from llm_workbench.config import LabConfig
     from llm_workbench.models.plugins import load_provider_plugins
+    from llm_workbench.scoring.plugins import load_scorer_plugins
 
     modules = [*LabConfig.from_env().provider_modules, *provider_modules]
     if modules:
         load_provider_plugins(modules)
+    if scorer_modules:
+        load_scorer_plugins(scorer_modules)
 
 
 cli.add_command(analyze)

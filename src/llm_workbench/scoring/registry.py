@@ -26,6 +26,22 @@ def register_scorer(type_name: str, factory: Callable[["ScorerSpec"], Scorer]) -
     SCORER_FACTORIES[type_name] = factory
 
 
+def scorer(type_name: str):
+    """Decorator sugar to register a scorer factory (class/callable) under `type_name`.
+
+        @scorer("my_metric")
+        class MyMetric:
+            name = "my_metric"
+            def __init__(self, spec): ...
+            def score(self, ctx): ...
+    """
+    def _decorate(factory: Callable[["ScorerSpec"], Scorer]):
+        register_scorer(type_name, factory)
+        return factory
+
+    return _decorate
+
+
 def build_scorers(spec: "EvalSpec", *, include_judge: bool = True) -> list[Scorer]:
     """Instantiate the scorers an eval declares. The judge is included only when
     the eval has one AND include_judge is True (the runner sets this by whether a
