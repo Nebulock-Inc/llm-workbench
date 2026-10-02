@@ -26,6 +26,12 @@ class ScoreResult:
     reasoning: str | None = None     # judge explanation
     raw_response: str | None = None
     error: str | None = None
+    # True when the scorer deliberately did not apply to this row (e.g. a per-field metric
+    # on a benign row, or a field the scenario has no ground truth for) rather than failing.
+    # Distinct from `error`, which also carries real failures (judge/API errors). Lets the
+    # row be filtered out of analysis without being mistaken for a 0 score. See
+    # runner/results.write_csv (the `status` column) and analysis/frame.load_long.
+    not_applicable: bool = False
 
 
 @runtime_checkable

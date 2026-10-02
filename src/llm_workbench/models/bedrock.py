@@ -78,7 +78,11 @@ class BedrockClient(BaseClient):
             else:
                 raise
         data = json.loads(resp["body"].read())
-        text = data["content"][0]["text"] if data.get("content") else ""
+        # content is a list of typed blocks; the first isn't guaranteed to be text
+        # (reasoning models emit a `thinking` block first, tool use a `tool_use` block),
+        # so pull the first text block rather than indexing [0]["text"].
+        blocks = data.get("content") or []
+        text = next((b["text"] for b in blocks if b.get("type") == "text" and "text" in b), "")
         u = data.get("usage", {})
         usage = Usage.from_in_out(u.get("input_tokens"), u.get("output_tokens"))
         return text, usage, data
