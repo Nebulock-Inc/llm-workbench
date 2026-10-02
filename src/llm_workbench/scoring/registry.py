@@ -35,7 +35,7 @@ def scorer(type_name: str):
             def __init__(self, spec): ...
             def score(self, ctx): ...
     """
-    def _decorate(factory: Callable[["ScorerSpec"], Scorer]):
+    def _decorate(factory: Callable[[ScorerSpec], Scorer]) -> Callable[[ScorerSpec], Scorer]:
         register_scorer(type_name, factory)
         return factory
 
