@@ -38,6 +38,7 @@ LLM judge, programmatic, or ground-truth options`"]
     end
 
     STORE[("results.jsonl / .csv")]
+    REVIEW[("review.jsonl")]
     ANALYSIS["`**Analysis**
 Includes paired stats (Friedman, Wilcoxon, Cohen's d, TOST)
 and mixed effects model
@@ -50,7 +51,8 @@ Renders report and plots`"]
     C_run ==> RC
     C_an --> ANALYSIS
     C_pow --> ANALYSIS
-    C_rev --> STORE
+    STORE --> C_rev
+    C_rev --> REVIEW
     C_init -.scaffold.-> DATA
     C_init -.scaffold.-> SPECS
     %% the run loop itself

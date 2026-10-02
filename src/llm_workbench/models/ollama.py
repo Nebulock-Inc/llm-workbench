@@ -73,10 +73,19 @@ class OllamaClient(BaseClient):
         try:
             resp = requests.get(f"{self.cfg.base_url}/api/tags", timeout=self.cfg.connect_timeout)
             resp.raise_for_status()
-            names = {m.get("name") for m in resp.json().get("models", [])}
+            payload = resp.json()
         except requests.exceptions.RequestException as exc:
             return (f"Could not reach Ollama at {self.cfg.base_url} to check availability "
                     f"({type(exc).__name__}); is it running? Set OLLAMA_BASE_URL to change the host.")
+        # Guard against a malformed payload: this hook must never raise, so bail with a
+        # warning rather than letting a bad shape blow up the .get() iteration below.
+        models = payload.get("models") if isinstance(payload, dict) else None
+        if not isinstance(models, list) or not all(
+            isinstance(m, dict) and isinstance(m.get("name"), str) for m in models
+        ):
+            return (f"Ollama at {self.cfg.base_url} returned an unexpected /api/tags response; "
+                    f"could not check whether {self.native!r} is pulled.")
+        names = {m["name"] for m in models}
         # Ollama defaults a tag-less name to ':latest'.
         if self.native in names or (":" not in self.native and f"{self.native}:latest" in names):
             return None

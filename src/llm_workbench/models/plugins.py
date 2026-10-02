@@ -41,8 +41,9 @@ def load_provider_plugins(modules: Iterable[str], *, add_cwd: bool = True) -> li
         if cwd not in sys.path:
             sys.path.insert(0, cwd)
 
-    before = dict(REGISTRY)  # prefix -> class, snapshot to detect overrides
+    before = dict(REGISTRY)  # prefix -> class before this load (built-ins etc.)
     loaded: list[str] = []
+    prev = dict(before)  # registry state before the current import, to catch intra-load overrides
     for name in names:
         try:
             importlib.import_module(name)
@@ -53,12 +54,21 @@ def load_provider_plugins(modules: Iterable[str], *, add_cwd: bool = True) -> li
                 "Make sure it is importable from the current directory or installed."
             ) from exc
         loaded.append(name)
-
-    for prefix, cls in REGISTRY.items():
-        if prefix in before and before[prefix] is not cls:
-            warnings.warn(
-                f"Provider plugin overrides the built-in {prefix!r} backend "
-                f"with {cls.__module__}.{cls.__qualname__}.",
-                stacklevel=2,
-            )
+        # Compare after each import so a later plugin clobbering a prefix registered by an
+        # earlier one in this same load is caught too — not only overrides of pre-load state.
+        for prefix, cls in REGISTRY.items():
+            if prefix in prev and prev[prefix] is not cls:
+                if prefix in before:
+                    warnings.warn(
+                        f"Provider plugin overrides the built-in {prefix!r} backend "
+                        f"with {cls.__module__}.{cls.__qualname__}.",
+                        stacklevel=2,
+                    )
+                else:
+                    warnings.warn(
+                        f"Provider plugin {name!r} overrides the {prefix!r} backend registered "
+                        f"by an earlier plugin, now {cls.__module__}.{cls.__qualname__}.",
+                        stacklevel=2,
+                    )
+        prev = dict(REGISTRY)
     return loaded

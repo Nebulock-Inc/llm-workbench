@@ -9,6 +9,7 @@ within-1 agreement) per eval.
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -184,11 +185,14 @@ def calibrate(results, eval_filter, model_filter, scorer_filter, task_spec, revi
         else:
             try:
                 human_score = float(raw)
-                if human_score.is_integer():
-                    human_score = int(human_score)
             except ValueError:
                 warn("Enter a number, or a / s / o / q.")
                 continue
+            if not math.isfinite(human_score):  # 'nan'/'inf' parse as floats — reject
+                warn("Enter a finite number, or a / s / o / q.")
+                continue
+            if human_score.is_integer():
+                human_score = int(human_score)
 
         note = click.prompt("note (optional)", default="", show_default=False).strip()
         append_review(review_path, {

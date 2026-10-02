@@ -31,7 +31,9 @@ from llm_workbench.cli.output import warn
 @click.option("--standardize/--raw", default=True, show_default=True,
               help="Composite pooling. --standardize (default): z-score every metric (graded + binary "
                    "accuracy) to a common SD scale so no metric dominates; effects/Cohen's d/TOST margin "
-                   "are in SD units. --raw: average only the graded metrics on their raw rubric scale.")
+                   "are in SD units. --raw: average the quality metrics on their raw rubric scale "
+                   "(assumes one shared scale — a judge scorer emitting 0/1 guardrail scores is pooled "
+                   "too, so --exclude-metric differently-scaled judge metrics).")
 @click.option("--verbose/--simple", default=False, help="Full stats vs. headline results only.")
 def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, exclude_metrics, out_dir,
             plots, standardize, verbose):
