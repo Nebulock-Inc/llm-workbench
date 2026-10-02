@@ -20,7 +20,13 @@ def _copy_tree(src, dest: Path, *, force: bool, written: list[Path], skipped: li
     dest.mkdir(parents=True, exist_ok=True)
     for entry in sorted(src.iterdir(), key=lambda e: e.name):
         target = dest / entry.name
-        if entry.is_dir():
+        if target.is_symlink():
+            # Never follow a symlink in the destination tree. Writing through
+            # one (or recursing into a linked directory) could clobber files
+            # outside dest, even with --force. is_symlink() also catches
+            # dangling links, which exists() would report as absent.
+            skipped.append(target)
+        elif entry.is_dir():
             _copy_tree(entry, target, force=force, written=written, skipped=skipped)
         elif target.exists() and not force:
             skipped.append(target)

@@ -34,6 +34,7 @@ class ScoreRow:
     passed: bool | None = None
     reasoning: str | None = None
     error: str | None = None
+    not_applicable: bool = False  # scorer did not apply to this row (vs. failed); see write_csv
 
 
 @dataclass
@@ -94,8 +95,32 @@ def load_completed(out_dir: str | Path) -> set[tuple[str, str]]:
     return {(r.get("model_id"), r.get("record_id")) for r in _read_results(Path(out_dir) / "results.jsonl")}
 
 
+def _score_status(score: dict[str, Any]) -> str:
+    """Single-column analysis filter: 'scored' / 'not_applicable' / 'error'.
+
+    'not_applicable' means the scorer deliberately skipped this row (keep it out of the score
+    distribution without treating its 0.0 as a real score); 'error' is a genuine failure
+    (judge/API error, parse failure) that is also unscored. Prefer the structured
+    `not_applicable` flag; fall back to the error-message prefix so result files written
+    before the flag existed still classify correctly on re-export.
+    """
+    if score.get("not_applicable"):
+        return "not_applicable"
+    err = (score.get("error") or "").strip()
+    if not err:
+        return "scored"
+    if err.startswith(("n/a:", "not applicable:")):
+        return "not_applicable"
+    return "error"
+
+
 def write_csv(out_dir: str | Path) -> Path:
-    """Flatten results.jsonl to one CSV row per (model, record, scorer)."""
+    """Flatten results.jsonl to one CSV row per (model, record, scorer).
+
+    The `status` column ('scored'/'not_applicable'/'error') is the single filter for
+    analysis: keep only `status == "scored"` so gated and errored rows (both written with
+    score 0.0) don't pollute per-metric means.
+    """
     out_dir = Path(out_dir)
     rows: list[dict[str, Any]] = []
     for r in dedupe_latest(_read_results(out_dir / "results.jsonl"), successful_only=True):
@@ -105,12 +130,13 @@ def write_csv(out_dir: str | Path) -> Path:
         if scores:
             for s in scores:
                 rows.append({**base, "eval": s["eval"], "scorer": s["scorer"], "score": s["score"],
-                             "label": s.get("label"), "passed": s.get("passed"), "score_error": s.get("error")})
+                             "label": s.get("label"), "passed": s.get("passed"),
+                             "status": _score_status(s), "score_error": s.get("error")})
         else:
             rows.append({**base, "eval": None, "scorer": None, "score": None,
-                         "label": None, "passed": None, "score_error": None})
+                         "label": None, "passed": None, "status": "error", "score_error": None})
     cols = ["model_id", "record_id", "eval", "scorer", "score", "label", "passed",
-            "output", "latency_s", "score_error"]
+            "status", "output", "latency_s", "score_error"]
     csv_path = out_dir / "results.csv"
     with csv_path.open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=cols)

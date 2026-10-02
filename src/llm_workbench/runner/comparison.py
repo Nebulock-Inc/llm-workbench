@@ -92,11 +92,12 @@ def run_comparison(
                                    judge_client=judge_client)
                 na = _not_applicable_reason(spec, out)
                 for scorer in scorers_by_eval[spec.name]:
-                    res = (ScoreResult(scorer=scorer.name, score=0.0, error=na)
+                    res = (ScoreResult(scorer=scorer.name, score=0.0, error=na, not_applicable=True)
                            if na is not None else scorer.score(ctx))
                     score_rows.append(ScoreRow(eval=spec.name, scorer=res.scorer, score=res.score,
                                                label=res.label, passed=res.passed,
-                                               reasoning=res.reasoning, error=res.error))
+                                               reasoning=res.reasoning, error=res.error,
+                                               not_applicable=res.not_applicable))
 
             resp = out.response
             append_jsonl(results_path, RunResult(

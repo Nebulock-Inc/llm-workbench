@@ -139,9 +139,11 @@ def test_requires_aux_gates_every_scorer(tmp_path):
     # q1 carries the verdict -> every scorer runs, no not-applicable error.
     assert {s["scorer"] for s in by_id["q1"]["scores"]} == scorers
     assert all(s["error"] is None for s in by_id["q1"]["scores"])
-    # q2 lacks it -> every scorer is skipped as not-applicable.
+    # q2 lacks it -> every scorer is skipped as not-applicable (flagged, not just an error string).
     assert {s["scorer"] for s in by_id["q2"]["scores"]} == scorers
     assert all("not applicable" in (s["error"] or "") for s in by_id["q2"]["scores"])
+    assert all(s["not_applicable"] for s in by_id["q2"]["scores"])
+    assert not any(s["not_applicable"] for s in by_id["q1"]["scores"])
 
 
 def test_summary_and_csv_dedupe_to_latest(tmp_path):
@@ -161,6 +163,31 @@ def test_summary_and_csv_dedupe_to_latest(tmp_path):
     write_csv(tmp_path)
     lines = (tmp_path / "results.csv").read_text().strip().splitlines()
     assert len(lines) == 2  # header + one deduped row
+
+
+def test_csv_status_column(tmp_path):
+    import csv
+
+    from llm_workbench.runner.results import write_csv
+
+    def result(scores):
+        return json.dumps({"model_id": "mock/m1", "record_id": "q0", "input": {}, "output": "",
+                           "prompt": None, "latency_s": 0.1, "usage": {}, "error": None,
+                           "timestamp": "2026-01-01T00:00:00", "scores": scores})
+
+    (tmp_path / "results.jsonl").write_text(result([
+        {"eval": "E", "scorer": "ok", "score": 1.0, "error": None},                       # scored
+        {"eval": "E", "scorer": "flagged", "score": 0.0, "error": "n/a: benign row",
+         "not_applicable": True},                                                         # flag wins
+        {"eval": "E", "scorer": "legacy", "score": 0.0, "error": "n/a: no evidence cited"},  # old file: prefix fallback
+        {"eval": "E", "scorer": "boom", "score": 0.0, "error": "judge error: throttled"},  # real failure
+    ]) + "\n")
+
+    write_csv(tmp_path)
+    with (tmp_path / "results.csv").open() as fh:
+        status = {r["scorer"]: r["status"] for r in csv.DictReader(fh)}
+    assert status == {"ok": "scored", "flagged": "not_applicable",
+                      "legacy": "not_applicable", "boom": "error"}
 
 
 def test_limit(tmp_path):
