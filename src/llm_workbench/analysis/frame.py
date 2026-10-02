@@ -143,9 +143,12 @@ def pooled_rows(long_df: pd.DataFrame, exclude: set[str] | None = None, *,
     like the ground-truth checks), each z-scored within metric, so different scales are
     pooled on a common unit-variance scale — the composite and the mixed-model coefficients
     are then in SD units. Zero-variance metrics are dropped (see `_zscore_per_metric`).
-    With `standardize=False`: only the graded `quality` metrics on their raw scale (all on
-    the same rubric), minus excludes. Operational metrics (latency) are already dropped
-    upstream by `load_long`.
+    With `standardize=False`: average the `quality`-kind metrics on their raw scale, minus
+    excludes. This assumes those metrics share one rubric scale, but that is NOT enforced:
+    a judge scorer is always `quality` (see `metric_kind`), so one emitting 0/1 guardrail
+    scores would be pooled with graded 1-5 rubric metrics on a different scale. Exclude such
+    differently-scaled judge metrics (or use `standardize=True`) to keep the raw composite
+    meaningful. Operational metrics (latency) are already dropped upstream by `load_long`.
     """
     exclude = exclude or set()
     if not standardize:

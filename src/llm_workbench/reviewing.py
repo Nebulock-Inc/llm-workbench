@@ -9,6 +9,7 @@ loop lives in `cli/commands/calibrate.py`.
 from __future__ import annotations
 
 import json
+import math
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -96,6 +97,10 @@ def calibration_stats(reviews: list[dict[str, Any]]) -> list[dict[str, Any]]:
         j, h = r.get("judge_score"), r.get("human_score")
         if not isinstance(j, (int, float)) or not isinstance(h, (int, float)):
             continue
+        # NaN/±inf are floats and slip past the isinstance check; drop them so they
+        # can't poison the means or reach the JSON report as non-standard tokens.
+        if not math.isfinite(j) or not math.isfinite(h):
+            continue
         by_eval.setdefault(r.get("eval", "?"), []).append((float(j), float(h)))
 
     def _row(name: str, pairs: list[tuple[float, float]]) -> dict[str, Any]:
@@ -167,6 +172,6 @@ def write_calibration_report(reviews: list[dict[str, Any]], out_dir: str | Path)
         "n_reviews": n_scored,
         "calibration": rows,
     }
-    (out_dir / "calibration.json").write_text(json.dumps(report, indent=2, default=str))
+    (out_dir / "calibration.json").write_text(json.dumps(report, indent=2, default=str, allow_nan=False))
     (out_dir / "calibration.md").write_text(calibration_markdown(rows))
     return out_dir

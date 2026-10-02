@@ -135,7 +135,9 @@ def load_spec(path: str | Path) -> EvalSpec:
         if isinstance(score, bool) or not isinstance(score, (int, float)):
             raise EvalSpecError(f"{path}: label {label!r} must map to a number, got {score!r}.")
 
-    scorers = raw.get("scorers") or []
+    # Default only when the key is absent; a supplied non-list (e.g. {} or false)
+    # must reach the type check below rather than being coerced to an empty list.
+    scorers = raw.get("scorers", [])
     if not isinstance(scorers, list):
         raise EvalSpecError(f"{path}: 'scorers' must be a list of scorer entries.")
     allowed_scorer_keys = set(ScorerSpec.model_fields)
@@ -269,4 +271,9 @@ def write_spec(
     yaml_path.write_text(yaml_text)
     if prompt_text:
         prompt_path.write_text(prompt_text)
+    else:
+        # No prompt in this spec: drop any stale prompt.md so the round-trip below
+        # (which falls back to reading prompt.md when the yaml names no prompt)
+        # doesn't resurrect an old prompt that was just removed.
+        prompt_path.unlink(missing_ok=True)
     return load_spec(yaml_path)  # round-trip validation

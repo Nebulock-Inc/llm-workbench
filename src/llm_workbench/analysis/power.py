@@ -57,7 +57,8 @@ def from_run(results_path, reference: str | None = None, alpha: float = 0.05,
 
     By default (`standardize=True`) all metrics are pooled — graded quality AND binary
     accuracy metrics like the `ground_truth` checks — each z-scored within metric to a
-    common SD scale, so the resulting dz / N are in SD units. Pass `standardize=False` for
+    common SD scale, so the mean difference is expressed in SD units while the resulting dz
+    is a dimensionless effect size and N is a prompt count. Pass `standardize=False` for
     the raw graded-quality-only composite. To size the study on a specific track instead
     (e.g. the AI / Maliciousness determination accuracy), filter to it with `evals` /
     `scorers`.

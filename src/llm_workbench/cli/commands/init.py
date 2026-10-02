@@ -62,8 +62,12 @@ def init(directory: str, force: bool) -> None:
         teach("Nothing written — all starter files already exist. Re-run with --force to overwrite.")
         return
 
+    # The quickstart uses paths relative to DIRECTORY (prompt.txt, dataset.jsonl, and
+    # evals_kit/ via the default --eval-dir), so prepend a `cd` when we scaffolded elsewhere.
+    cd_hint = "" if dest.resolve() == Path.cwd() else f"  cd {directory}\n"
     teach(
         "\nTry it end to end (no API keys needed — the mock provider just echoes the prompt):\n"
+        f"{cd_hint}"
         "  llm-workbench run compare \\\n"
         "      --prompt-template prompt.txt --dataset dataset.jsonl \\\n"
         "      --model mock/echo --eval example-helpfulness --out-dir runs/example\n\n"

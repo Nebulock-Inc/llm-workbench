@@ -22,8 +22,9 @@ from llm_workbench.cli.output import console, teach
                    "AI/Maliciousness accuracy track (repeatable). Binary metrics are pooled by default.")
 @click.option("--standardize/--raw", default=True, show_default=True,
               help="With --from-run: --standardize (default) pools all metrics (incl. binary accuracy "
-                   "metrics like ground_truth) by z-scoring each to a common SD scale, so dz / N are in "
-                   "SD units. --raw averages only the graded metrics on their raw rubric scale.")
+                   "metrics like ground_truth) by z-scoring each to a common SD scale, so the mean "
+                   "difference is expressed in SD units while dz is a dimensionless effect size and N "
+                   "is a prompt count. --raw averages only the graded metrics on their raw rubric scale.")
 @click.option("--alpha", type=float, default=0.05, show_default=True)
 @click.option("--power", "target_power", type=float, default=0.8, show_default=True)
 @click.option("--alternative", type=click.Choice(["two-sided", "larger", "smaller"]),
