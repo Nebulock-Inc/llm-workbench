@@ -1,8 +1,9 @@
 [project]
-name = "llm-lab"
+name = "llm-workbench"
 version = "0.1.0"
 description = "Framework for testing the best LLM for your task"
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.43.86",
@@ -21,11 +22,11 @@ requires = ["uv_build>=0.9.7,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "llm_lab"
+module-name = "llm_workbench"
 module-root = "src"
 
 [project.scripts]
-llm-lab = "llm_lab.cli.main:main"
+llm-workbench = "llm_workbench.cli.main:main"
 
 [project.optional-dependencies]
 dev = [

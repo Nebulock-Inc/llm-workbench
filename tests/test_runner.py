@@ -6,12 +6,12 @@ import json
 
 import pytest
 
-from llm_lab.datasets.jsonl import read_jsonl
-from llm_lab.evals.spec import write_spec
-from llm_lab.models.mock import MockClient
-from llm_lab.runner.comparison import run_comparison
-from llm_lab.runner.results import _read_results, load_completed, summarize
-from llm_lab.tasks.base import PromptTemplateTask
+from llm_workbench.datasets.jsonl import read_jsonl
+from llm_workbench.evals.spec import write_spec
+from llm_workbench.models.mock import MockClient
+from llm_workbench.runner.comparison import run_comparison
+from llm_workbench.runner.results import _read_results, load_completed, summarize
+from llm_workbench.tasks.base import PromptTemplateTask
 
 
 def _dataset(tmp_path):
@@ -98,7 +98,7 @@ def test_run_comparison_records_task_errors(tmp_path):
 
 
 def test_custom_task_with_aux_end_to_end(tmp_path):
-    from llm_lab.tasks.loader import load_task
+    from llm_workbench.tasks.loader import load_task
 
     ds = tmp_path / "d.jsonl"
     ds.write_text('{"id": "q1", "input": "hello", "org_name": "Acme"}\n')
@@ -116,8 +116,8 @@ def test_custom_task_with_aux_end_to_end(tmp_path):
 def test_requires_aux_gates_every_scorer(tmp_path):
     # A spec scoped with `requires_aux` must skip ALL its scorers (judge + deterministic)
     # on rows missing the required task-aux value, not just the judge.
-    from llm_lab.evals.spec import load_spec
-    from llm_lab.tasks.loader import load_task
+    from llm_workbench.evals.spec import load_spec
+    from llm_workbench.tasks.loader import load_task
 
     ds = tmp_path / "d.jsonl"
     ds.write_text('{"id": "q1", "output": "ans one", "verdict": "AI"}\n'
@@ -130,7 +130,7 @@ def test_requires_aux_gates_every_scorer(tmp_path):
     )
     out = tmp_path / "runs"
     run_comparison(
-        task=load_task("llm_lab.tasks:ReplayTask"),  # copies record fields into aux
+        task=load_task("llm_workbench.tasks:ReplayTask"),  # copies record fields into aux
         dataset_path=ds, model_ids=["mock/echo"], specs=[load_spec(edir)],
         judge_model="mock/canned:SCORE: 1", out_dir=out,
     )
@@ -139,13 +139,15 @@ def test_requires_aux_gates_every_scorer(tmp_path):
     # q1 carries the verdict -> every scorer runs, no not-applicable error.
     assert {s["scorer"] for s in by_id["q1"]["scores"]} == scorers
     assert all(s["error"] is None for s in by_id["q1"]["scores"])
-    # q2 lacks it -> every scorer is skipped as not-applicable.
+    # q2 lacks it -> every scorer is skipped as not-applicable (flagged, not just an error string).
     assert {s["scorer"] for s in by_id["q2"]["scores"]} == scorers
     assert all("not applicable" in (s["error"] or "") for s in by_id["q2"]["scores"])
+    assert all(s["not_applicable"] for s in by_id["q2"]["scores"])
+    assert not any(s["not_applicable"] for s in by_id["q1"]["scores"])
 
 
 def test_summary_and_csv_dedupe_to_latest(tmp_path):
-    from llm_lab.runner.results import summarize, write_csv
+    from llm_workbench.runner.results import summarize, write_csv
 
     def row(ts, score):
         return json.dumps({"model_id": "mock/m1", "record_id": "q0", "input": {}, "output": "",
@@ -161,6 +163,31 @@ def test_summary_and_csv_dedupe_to_latest(tmp_path):
     write_csv(tmp_path)
     lines = (tmp_path / "results.csv").read_text().strip().splitlines()
     assert len(lines) == 2  # header + one deduped row
+
+
+def test_csv_status_column(tmp_path):
+    import csv
+
+    from llm_workbench.runner.results import write_csv
+
+    def result(scores):
+        return json.dumps({"model_id": "mock/m1", "record_id": "q0", "input": {}, "output": "",
+                           "prompt": None, "latency_s": 0.1, "usage": {}, "error": None,
+                           "timestamp": "2026-01-01T00:00:00", "scores": scores})
+
+    (tmp_path / "results.jsonl").write_text(result([
+        {"eval": "E", "scorer": "ok", "score": 1.0, "error": None},                       # scored
+        {"eval": "E", "scorer": "flagged", "score": 0.0, "error": "n/a: benign row",
+         "not_applicable": True},                                                         # flag wins
+        {"eval": "E", "scorer": "legacy", "score": 0.0, "error": "n/a: no evidence cited"},  # old file: prefix fallback
+        {"eval": "E", "scorer": "boom", "score": 0.0, "error": "judge error: throttled"},  # real failure
+    ]) + "\n")
+
+    write_csv(tmp_path)
+    with (tmp_path / "results.csv").open() as fh:
+        status = {r["scorer"]: r["status"] for r in csv.DictReader(fh)}
+    assert status == {"ok": "scored", "flagged": "not_applicable",
+                      "legacy": "not_applicable", "boom": "error"}
 
 
 def test_limit(tmp_path):

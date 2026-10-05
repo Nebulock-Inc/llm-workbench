@@ -40,8 +40,8 @@ Ergonomic sugar to add alongside: a `@scorer("type_name")` decorator in `registr
 that wraps `register_scorer`, so a user module reads:
 
 ```python
-from llm_lab.scoring.registry import scorer
-from llm_lab.scoring.base import ScoreResult
+from llm_workbench.scoring.registry import scorer
+from llm_workbench.scoring.base import ScoreResult
 
 @scorer("keyword_density")
 class KeywordDensity:
@@ -111,6 +111,6 @@ class KeywordDensity:
 
 ## Out of scope (note for later)
 
-- Python entry-point (`[project.entry-points."llm_lab.scorers"]`) discovery for
+- Python entry-point (`[project.entry-points."llm_workbench.scorers"]`) discovery for
   installed plugin packages.
 - Per-eval scorer config schema validation beyond what `ScorerSpec` already does.

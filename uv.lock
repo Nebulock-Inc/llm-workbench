@@ -725,7 +725,7 @@ wheels = [
 ]
 
 [[package]]
-name = "llm-lab"
+name = "llm-workbench"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

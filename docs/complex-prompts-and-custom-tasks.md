@@ -26,8 +26,8 @@ When producing the input takes **extra steps** — resolving identifiers, inject
 
 ```python
 # examples/org_scoped_task.py
-from llm_lab.object_types import GenerationRequest
-from llm_lab.tasks.base import TaskOutput
+from llm_workbench.object_types import GenerationRequest
+from llm_workbench.tasks.base import TaskOutput
 
 class OrgScopedTask:
     name = "org-scoped"
@@ -46,19 +46,76 @@ class OrgScopedTask:
 Run it:
 
 ```bash
-uv run llm-lab run compare --task examples.org_scoped_task:OrgScopedTask \
+uv run llm-workbench run compare --task examples.org_scoped_task:OrgScopedTask \
     --dataset pilot.jsonl --model ollama/llama3.1 --eval answer-quality \
     --judge-model bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0
 ```
 
 A runnable version lives at [`examples/org_scoped_task.py`](../examples/org_scoped_task.py).
 
+## Custom scorers (`--scorer-module`)
+
+**Most evals never need this.** An `eval.yaml` already covers the common cases with no
+code: the built-in deterministic checks (`exact_match`, `contains`, `regex`, `json_schema`,
+`numeric_tolerance`), the operational `latency` scorer, an LLM-judge rubric, and the
+per-record `ground_truth` override. Reach for a **custom scorer** only when your metric
+can't be expressed that way — e.g. set-based precision/recall/F1, matching several values at
+once, or checking the output against external data.
+
+A scorer is any object with a `name` and `score(ctx) -> ScoreResult`. Register it under a
+`type:` string with the `@scorer(...)` decorator (or `register_scorer(...)`), in a module
+that's importable from your working directory:
+
+```python
+# my_scorers.py
+from llm_workbench.scoring.base import ScoreResult
+from llm_workbench.scoring.registry import scorer
+
+@scorer("keyword_density")
+class KeywordDensity:
+    name = "keyword_density"
+    def __init__(self, spec):            # spec: the eval.yaml entry (type, expected_field, params)
+        self.keyword = spec.params["keyword"]
+    def score(self, ctx):                # ctx: record, output, task_output (incl. aux), judge_client
+        n = ctx.output.lower().count(self.keyword.lower())
+        return ScoreResult(scorer=self.name, score=float(n))
+```
+
+Reference it in an `eval.yaml` like any built-in scorer (one registered `type:` can back
+several entries via different `params`, each returning a distinct `name`):
+
+```yaml
+scorers:
+  - {type: keyword_density, params: {keyword: "error"}}
+```
+
+**Loading it — the one thing to get right.** `--scorer-module` is a **global** option on the
+`llm-workbench` command (like `--provider-module`), so it goes **before** the subcommand. It
+imports your module so its `register_scorer(...)` side effects run before scorers are built:
+
+```bash
+uv run llm-workbench --scorer-module my_scorers run compare \
+    --task ... --dataset pilot.jsonl --model ... --eval my-eval --eval-dir evals
+```
+
+- It's needed for **`run compare`**: scorer `type:`s are resolved by `build_scorers`, which
+  **fails fast on an unknown type**. (`evals validate` only *parses* the YAML — it does not
+  resolve scorer types — so it passes with or without the flag, and won't flag an unknown
+  type; validate a custom-scorer eval by doing a `--limit 1 --model mock/echo` run instead.)
+- A scorer can **self-gate**: return `ScoreResult(..., error="n/a: ...")` and the row is
+  dropped from that metric's distribution (same path as an eval's `requires_aux`), so a
+  metric can apply to only the rows it makes sense for.
+- Keep metrics **higher = better** to match the eval's default `MAXIMIZE` direction. A
+  continuous score (>2 distinct values) is treated as a *quality* metric (enters the
+  composite and the mixed-model / effect-size battery); a 0/1 score is treated as a *binary*
+  accuracy metric.
+
 ## Replaying stored outputs (judge calibration & re-scoring)
 
 Sometimes you want to run the **judges over a fixed answer** instead of a freshly generated one — to calibrate the judges themselves, to regression-test a rubric or judge-model change, or to re-score a previous run. The built-in `ReplayTask` does exactly this: it ignores the model under test and returns an answer already present in each record, so the full judge/scoring/reporting pipeline runs over frozen inputs.
 
 ```bash
-uv run llm-lab run compare --task llm_lab.tasks:ReplayTask \
+uv run llm-workbench run compare --task llm_workbench.tasks:ReplayTask \
     --dataset calibration.jsonl --model mock/echo --eval-dir evals \
     --judge-model bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0
 ```
@@ -84,7 +141,7 @@ Key points:
 ## What `run(record, client)` receives and returns
 
 - **`record`** — one row of your JSONL dataset, as a dict (all fields, including your own like `org_id`, `org_name`).
-- **`client`** — the model under test (a `ModelClient`). Call `client.generate(GenerationRequest(...))` as many times as your workflow needs. Need a *different* model for a sub-step (e.g. a cheap model to draft, an expensive one to finish)? Build it inside the task with `from llm_lab.models.factory import make_client; make_client("provider/model")`.
+- **`client`** — the model under test (a `ModelClient`). Call `client.generate(GenerationRequest(...))` as many times as your workflow needs. Need a *different* model for a sub-step (e.g. a cheap model to draft, an expensive one to finish)? Build it inside the task with `from llm_workbench.models.factory import make_client; make_client("provider/model")`.
 - **Returns `TaskOutput`** with:
   - `output` (str) — the final answer that the evals score.
   - `prompt` (optional) — the actual prompt sent, saved for debugging.

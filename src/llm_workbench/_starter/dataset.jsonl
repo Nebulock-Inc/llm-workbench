@@ -1,0 +1,8 @@
+{"id": "q1", "input": "What is the capital of Japan?", "expected": "Tokyo"}
+{"id": "q2", "input": "What is the boiling point of water at sea level, in degrees Celsius?", "expected": "100"}
+{"id": "q3", "input": "Who wrote the play Romeo and Juliet?", "expected": "William Shakespeare"}
+{"id": "q4", "input": "What is the chemical symbol for gold?", "expected": "Au"}
+{"id": "q5", "input": "How many continents are there on Earth?", "expected": "7"}
+{"id": "q6", "input": "What is the largest planet in our solar system?", "expected": "Jupiter"}
+{"id": "q7", "input": "In what year did World War II end?", "expected": "1945"}
+{"id": "q8", "input": "What gas do plants primarily absorb from the atmosphere for photosynthesis?", "expected": "Carbon dioxide"}

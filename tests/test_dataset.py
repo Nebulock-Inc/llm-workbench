@@ -6,9 +6,9 @@ import json
 
 import pytest
 
-from llm_lab.datasets.build import from_csv, generate
-from llm_lab.datasets.jsonl import read_jsonl
-from llm_lab.models.mock import MockClient
+from llm_workbench.datasets.build import from_csv, generate
+from llm_workbench.datasets.jsonl import read_jsonl
+from llm_workbench.models.mock import MockClient
 
 
 def test_from_csv_writes_records(tmp_path):

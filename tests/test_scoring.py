@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from llm_lab.evals.spec import EvalSpec, ScorerSpec
-from llm_lab.models.mock import MockClient
-from llm_lab.object_types import Response
-from llm_lab.scoring import operational as op
-from llm_lab.scoring import programmatic as pr
-from llm_lab.scoring.base import ScoreContext
-from llm_lab.scoring.judge import LLMJudgeScorer
-from llm_lab.scoring.registry import build_scorers
-from llm_lab.tasks.base import TaskOutput
+from llm_workbench.evals.spec import EvalSpec, ScorerSpec
+from llm_workbench.models.mock import MockClient
+from llm_workbench.object_types import Response
+from llm_workbench.scoring import operational as op
+from llm_workbench.scoring import programmatic as pr
+from llm_workbench.scoring.base import ScoreContext
+from llm_workbench.scoring.judge import LLMJudgeScorer
+from llm_workbench.scoring.registry import build_scorers
+from llm_workbench.tasks.base import TaskOutput
 
 
 def _spec(**over):
@@ -102,6 +102,24 @@ def test_json_schema():
     assert pr.JSONSchemaValid(sp).score(_ctx(output='{"a": 1}')).passed is True
     assert pr.JSONSchemaValid(sp).score(_ctx(output='{"b": 1}')).passed is False
     assert pr.JSONSchemaValid(sp).score(_ctx(output="not json")).passed is False
+
+
+def test_json_schema_tolerates_code_fence():
+    sp = ScorerSpec(type="json_schema", params={"schema": {"type": "object", "required": ["relevant"]}})
+    fenced = '```json\n{\n  "relevant": "Yes"\n}\n```'
+    assert pr.JSONSchemaValid(sp).score(_ctx(output=fenced)).passed is True
+    # bare ``` fence (no language) and surrounding whitespace also tolerated
+    assert pr.JSONSchemaValid(sp).score(_ctx(output='\n```\n{"relevant": "No"}\n```\n')).passed is True
+    # schema is still enforced on the unwrapped body
+    assert pr.JSONSchemaValid(sp).score(_ctx(output='```json\n{"other": 1}\n```')).passed is False
+
+
+def test_json_schema_strict_when_strip_fence_false():
+    sp = ScorerSpec(type="json_schema", params={"strip_fence": False,
+                                                "schema": {"type": "object", "required": ["relevant"]}})
+    res = pr.JSONSchemaValid(sp).score(_ctx(output='```json\n{"relevant": "Yes"}\n```'))
+    assert res.passed is False
+    assert "not valid JSON" in res.reasoning
 
 
 def test_numeric_tolerance():
