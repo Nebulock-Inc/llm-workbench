@@ -1,0 +1,64 @@
+flowchart TB
+    subgraph CLI["`**CLI — main user interface**`"]
+    C_init ~~~ C_ds
+
+        direction TB
+        C_init["`**init**
+create working example and folders`"]
+        C_ds["`**dataset from-csv / generate**
+build the test set from scratch or from provided file`"]
+        C_ev["`**evals new / validate** 
+define evaluation criteria and scoring`"]
+        C_mod["`**models list / ping**
+check LLM providers reachable`"]
+        C_run["`**run compare**
+★ run the experiment`"]
+        C_an["`**analyze**
+compute comparison statistics`"]
+        C_pow["`**power**
+sample-size planning based on small test or estimates`"]
+        C_rev["`**calibrate**
+review judge decisions vs. human judgment (bias + agreement)`"]
+    end
+
+    DATA[/"dataset.jsonl"/]
+    SPECS[/"eval specs
+(eval.yaml + prompt.md)"/]
+
+    subgraph CORE["core run loop (run compare)"]
+        RC["runner
+sweep model × record"]
+        TASKS["`**Tasks**
+produce output per record`"]
+        MODELS["`**Models**
+6 backends in provider registry
+Supports: mock, ollama, openai, anthropic, bedrock, mantle`"]
+        EVALS["`**Evals + Scoring**
+LLM judge, programmatic, or ground-truth options`"]
+    end
+
+    STORE[("results.jsonl / .csv")]
+    REVIEW[("review.jsonl")]
+    ANALYSIS["`**Analysis**
+Includes paired stats (Friedman, Wilcoxon, Cohen's d, TOST)
+and mixed effects model
+Renders report and plots`"]
+
+    %% CLI commands each drive a different stage
+    C_ds --> DATA
+    C_ev --> SPECS
+    C_mod -.probe.-> MODELS
+    C_run ==> RC
+    C_an --> ANALYSIS
+    C_pow --> ANALYSIS
+    STORE --> C_rev
+    C_rev --> REVIEW
+    C_init -.scaffold.-> DATA
+    C_init -.scaffold.-> SPECS
+    %% the run loop itself
+    DATA --> RC
+    SPECS --> EVALS
+    RC --> TASKS --> MODELS
+    RC --> EVALS
+    EVALS -->|judge model| MODELS
+    RC --> STORE --> ANALYSIS
