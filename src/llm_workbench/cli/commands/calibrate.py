@@ -65,8 +65,8 @@ def _render(d: dict, idx: int, total: int, *, full: bool, review_context=None) -
     if ctx:
         teach("  " + "   ".join(ctx))
 
-    sql = d.get("prompt") or "(no query recorded)"
-    console.print(Panel(sql, title="query run", title_align="left", border_style="blue"))
+    prompt_text = d.get("prompt") or "(no prompt recorded)"
+    console.print(Panel(prompt_text, title="prompt", title_align="left", border_style="blue"))
 
     # Optional task-supplied live context (e.g. re-running the query to show its results),
     # never persisted to disk. Failures here must not break the review loop.

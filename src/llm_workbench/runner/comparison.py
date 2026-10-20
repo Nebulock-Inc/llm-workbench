@@ -8,7 +8,14 @@ from typing import Callable
 from llm_workbench.config import LabConfig
 from llm_workbench.datasets.jsonl import append_jsonl, read_jsonl
 from llm_workbench.models.factory import make_client
-from llm_workbench.runner.results import RunResult, ScoreRow, load_completed, print_summary, record_id, write_csv
+from llm_workbench.runner.results import (
+    RunResult,
+    ScoreRow,
+    load_completed,
+    print_summary,
+    record_id,
+    write_csv,
+)
 from llm_workbench.scoring.base import ScoreContext, ScoreResult
 from llm_workbench.scoring.registry import build_scorers
 

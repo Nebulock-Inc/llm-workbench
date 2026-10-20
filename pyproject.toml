@@ -38,7 +38,7 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.9.7,<0.10.0"]
+requires = ["uv_build>=0.9.7,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
@@ -75,3 +75,12 @@ analysis = [
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# Lean gate: pyflakes (real bugs), pycodestyle errors, and import sorting.
+# E501 (line length) is left to `ruff format`, not enforced as a lint error.
+select = ["E", "F", "I"]
+ignore = ["E501"]

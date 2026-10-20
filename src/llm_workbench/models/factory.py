@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from llm_workbench.config import LabConfig
+from llm_workbench.models.anthropic import AnthropicClient
 from llm_workbench.models.base import ModelClient
-from llm_workbench.models.registry import REGISTRY, register_provider
+from llm_workbench.models.bedrock import BedrockClient
+from llm_workbench.models.bedrock_mantle import MantleClient
 
 # Register built-in providers. Importing a provider module must NOT import its
 # heavy SDK (openai/anthropic) at module top — those are lazy-imported inside
@@ -12,9 +14,7 @@ from llm_workbench.models.registry import REGISTRY, register_provider
 from llm_workbench.models.mock import MockClient
 from llm_workbench.models.ollama import OllamaClient
 from llm_workbench.models.openai_compat import OpenAICompatClient
-from llm_workbench.models.bedrock import BedrockClient
-from llm_workbench.models.bedrock_mantle import MantleClient
-from llm_workbench.models.anthropic import AnthropicClient
+from llm_workbench.models.registry import REGISTRY, register_provider
 
 register_provider("mock", MockClient)
 register_provider("ollama", OllamaClient)
