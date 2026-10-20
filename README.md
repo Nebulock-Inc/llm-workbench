@@ -144,7 +144,7 @@ class MyTask:
 
 Point `run compare` at it with `--task my_task:MyTask` (the module just needs to be importable from your working directory — `--task` and `--prompt-template` are mutually exclusive). The `aux` dict is how a task surfaces derived values — retrieved context, generated queries, a resolved org — so your eval rubric prompts can reference them as `{placeholders}` exactly like `{input}` and `{output}`.
 
-Two runnable examples ship in the repo: [`examples/my_task.py`](examples/my_task.py) (minimal) and [`examples/org_scoped_task.py`](examples/org_scoped_task.py) (injects scoping and exposes `aux`). For the full contract — what `run` receives, everything `TaskOutput` can carry, how `aux` reaches your evals, and multi-step pipelines — see [Complex Prompts and Custom Tasks](docs/complex-prompts-and-custom-tasks.md). A built-in `ReplayTask` scores a pre-existing answer instead of calling the model under test (the judge model still runs), for judge calibration and re-scoring (see the [Quickstart](#quickstart-run-the-shipped-example) note).
+Two runnable examples ship in the repo: [`examples/my_task.py`](examples/my_task.py) (minimal) and [`examples/org_scoped_task.py`](examples/org_scoped_task.py) (injects scoping and exposes `aux`). For the full contract — what `run` receives, everything `TaskOutput` can carry, how `aux` reaches your evals, and multi-step pipelines — see [Complex Prompts and Custom Tasks](docs/complex-prompts-and-custom-tasks.md). A built-in `ReplayTask` scores a pre-existing answer instead of calling the model under test (the judge model still runs), for judge calibration and re-scoring (see the [Quickstart](#quickstart-scaffold-a-starter-and-run-it) note).
 
 # Eval Creation
 
