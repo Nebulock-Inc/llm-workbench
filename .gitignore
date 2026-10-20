@@ -220,3 +220,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Internal planning docs — not for public release
+docs/plans/
+
+# macOS
+.DS_Store
+
+# Rendered whitepaper PDF — the notebook (docs/whitepaper.ipynb) is the source of truth
+docs/whitepaper.pdf
