@@ -57,6 +57,7 @@ llm-workbench = "llm_workbench.cli.main:main"
 dev = [
     "pytest>=8",
     "ruff>=0.6",
+    "pre-commit>=4",
 ]
 openai = [
     "openai>=3.7.0",

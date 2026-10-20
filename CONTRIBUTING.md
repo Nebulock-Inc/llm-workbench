@@ -20,6 +20,13 @@ Run commands through `uv run` so they use the project environment:
 uv run llm-workbench --help
 ```
 
+Enable the pre-commit hook so lint runs automatically before each commit (same
+check as CI):
+
+```bash
+uv run pre-commit install
+```
+
 ## Before you open a PR
 
 Run the test suite and the linter:
