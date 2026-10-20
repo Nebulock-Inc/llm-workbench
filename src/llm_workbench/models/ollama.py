@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import requests
 
 from llm_workbench.models.base import BaseClient
 from llm_workbench.object_types import GenerationRequest, Response, Usage
-from dataclasses import replace
 
 if TYPE_CHECKING:
     from llm_workbench.config import LabConfig, OllamaConfig

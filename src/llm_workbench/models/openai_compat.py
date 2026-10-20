@@ -4,11 +4,11 @@ LM Studio, Azure, or a local server — selected by swapping base_url/api_key.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from llm_workbench.models.base import BaseClient, importing
 from llm_workbench.object_types import GenerationRequest, Response, Usage
-from dataclasses import replace
 
 if TYPE_CHECKING:
     from llm_workbench.config import LabConfig, OpenAICompatConfig

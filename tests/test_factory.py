@@ -170,7 +170,7 @@ def test_mantle_endpoint_mismatch_detection():
 
 def test_mantle_probes_endpoints_until_one_answers_then_caches():
     from llm_workbench.config import LabConfig
-    from llm_workbench.models.bedrock_mantle import MantleClient, _ENDPOINT_BY_MODEL
+    from llm_workbench.models.bedrock_mantle import _ENDPOINT_BY_MODEL, MantleClient
     from llm_workbench.object_types import GenerationRequest, Usage
 
     _ENDPOINT_BY_MODEL.pop("zai.glm-4.7", None)  # start from an undetected model
@@ -203,7 +203,7 @@ def test_mantle_probes_endpoints_until_one_answers_then_caches():
 
 def test_mantle_real_400_is_not_swallowed_by_the_probe():
     from llm_workbench.config import LabConfig
-    from llm_workbench.models.bedrock_mantle import MantleClient, _ENDPOINT_BY_MODEL
+    from llm_workbench.models.bedrock_mantle import _ENDPOINT_BY_MODEL, MantleClient
     from llm_workbench.object_types import GenerationRequest
 
     _ENDPOINT_BY_MODEL.pop("some.model", None)
