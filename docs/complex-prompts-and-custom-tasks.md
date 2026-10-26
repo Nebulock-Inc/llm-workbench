@@ -51,7 +51,7 @@ uv run llm-workbench run compare --task examples.org_scoped_task:OrgScopedTask \
     --judge-model bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0
 ```
 
-A runnable version lives at [`examples/org_scoped_task.py`](../examples/org_scoped_task.py).
+A runnable version lives at [`examples/org_scoped_task.py`](https://github.com/Nebulock-Inc/llm-workbench/blob/main/examples/org_scoped_task.py).
 
 ## Custom scorers (`--scorer-module`)
 
