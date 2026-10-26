@@ -1,7 +1,18 @@
 # Find the LLM You Need
 
+[![PyPI version](https://img.shields.io/pypi/v/llm-workbench)](https://pypi.org/project/llm-workbench/)
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Nebulock-Inc/llm-workbench/blob/main/LICENSE)
 
-This library, `llm_workbench`, gives you a toolkit to do all the tasks involved in running experiments testing different LLM options on your particular use case.
+**[Quickstart](#quickstart-scaffold-a-starter-and-run-it)** • **[Install](#install--setup)** • **[Define a task](#defining-your-task)** • **[Run a comparison](#running-the-experiment)** • **[Analyze results](#result-analysis)** • **[Examples](examples/)**
+
+## Introduction
+
+Teams often choose LLMs by vibes or minimal spot checking. Unfortunately, this process opens us up to missing real gaps in model performance or regressions, even when we're using expensive frontier models. Instead, we can apply statistical techniques to figure out which model is truly the best quality for our use cases. 
+
+The `llm-workbench` Python library guides data scientists and machine learning practitioners through the process of statistically evaluating multiple LLMs for performance on custom tasks, including agentic tasks. It's lightweight and flexible, but guides you on how to structure your work to get reliable and trustworthy results. 
+
+The toolkit supports the following tasks:
 
 * Defining your task (what your LLM needs to do)
 * Creating evals
@@ -11,22 +22,9 @@ This library, `llm_workbench`, gives you a toolkit to do all the tasks involved 
 * Running the experiment, collecting prompt/response pairs using LLMs from Anthropic, OpenAI, Ollama, or AWS Bedrock (including Bedrock Mantle)
 * Analyzing the results, selecting the best model for your use case
 
-Process Diagram
-![](docs/architecture-overview.png)
 
-Read on to learn how to use it for all these steps.
 
-***
-
-# Introduction
-
-The purpose of this library is to help you decide what LLM is the right choice for your task. The process is to define your task (what your LLM needs to do), then create evals that will assess the measures of quality that matter for your project (examples provided in the library). After you've done this, you'll develop a pool of prompts that resemble what your LLM will be asked to do in production, and you'll need to create enough to achieve statistical significance. (That number is determined by the power analysis, which also has a tool here.)
-
-After you create your prompt test set and your evals, you're ready to run the experiment on however many LLMs you want to test. Each LLM will be asked each prompt, and each eval will run on that prompt/response pair, producing scores. These scores are the raw material used for the result analysis.
-
-In the result analysis, depending on the data size and quality, you'll get statistical output indicating which model works the best (if that can be determined).
-
-# Install & Setup
+## Install & Setup
 
 Requires Python 3.12+.
 
@@ -55,9 +53,12 @@ llm-workbench --help
 
 The workflow follows the sections below: **define your task → create evals → run a small pilot → size the study with power analysis → build the full test set → run the comparison → analyze the results.**
 
-> **Developing on llm-workbench itself?** Clone the repo and `uv sync --extra analysis` instead; then prefix commands with `uv run` (e.g. `uv run llm-workbench --help`). The examples below use the installed `llm-workbench` command.
+![Architecture overview: the llm-workbench experiment pipeline, from task definition through evals, pilot, power analysis, running the comparison, and result analysis](docs/architecture-overview.png)
 
-# Quickstart (scaffold a starter and run it)
+Read on to learn how to use it for all these steps.
+
+
+## Quickstart (scaffold a starter and run it)
 
 `llm-workbench init` writes a tiny, self-contained example into your current directory — a
 general-knowledge Q&A dataset (`dataset.jsonl`), a prompt template (`prompt.txt`), and a
@@ -101,13 +102,13 @@ record instead of calling the model under test — for calibrating the judges, r
 a rubric or judge-model change, or re-scoring a past run. See
 [Replaying stored outputs](docs/complex-prompts-and-custom-tasks.md#replaying-stored-outputs-judge-calibration--re-scoring).
 
-# Defining Your Task
+## Defining Your Task
 
 A **task** is the thing you're testing: it takes one record from your dataset, does whatever your LLM needs to do with it, and returns the answer that your evals will score. Everything downstream — the prompts you write, the evals you design, the models you compare — is in service of measuring how well different models perform *this task*. So it's the first thing to pin down, even though the code for it can be as little as one file (or none).
 
 There are two ways to define a task, and most projects only ever need the first.
 
-## The default task: just a prompt template (no code)
+### The default task: just a prompt template (no code)
 
 If your task is "fill each input into a prompt and ask the model" — the common one-prompt-per-row case — you don't write any code. You write a **prompt template**: a plain text file with `{placeholders}` that get filled from each dataset record's fields. Pass it with `--prompt-template`.
 
@@ -120,7 +121,7 @@ Question: {input}
 
 `{input}` is filled from the `input` field of each record in your dataset (see [Prompt Test Set Creation](#prompt-test-set-creation)). Any other field on the record can be a placeholder too — `{org_name}`, `{context}`, etc. — so **multi-variable prompts also need no code**; just add matching fields to your JSONL. (List/dict fields are rendered as readable JSON.) That's the whole task: `run compare --prompt-template my_prompt.txt ...` fills the template, calls each model, and hands the answer to your evals.
 
-## A custom task: when producing the input takes extra steps
+### A custom task: when producing the input takes extra steps
 
 Write a **custom task** (a small Python class) only when getting to the answer needs steps *beyond* filling one template — resolving identifiers, injecting tenant/org scoping computed from an id, retrieving context, or a multi-call *generate → run → summarize* pipeline. A task is any class with a `name` and a `run(record, client) -> TaskOutput` method, where `client` is the model under test:
 
@@ -146,7 +147,7 @@ Point `run compare` at it with `--task my_task:MyTask` (the module just needs to
 
 Two runnable examples ship in the repo: [`examples/my_task.py`](examples/my_task.py) (minimal) and [`examples/org_scoped_task.py`](examples/org_scoped_task.py) (injects scoping and exposes `aux`). For the full contract — what `run` receives, everything `TaskOutput` can carry, how `aux` reaches your evals, and multi-step pipelines — see [Complex Prompts and Custom Tasks](docs/complex-prompts-and-custom-tasks.md). A built-in `ReplayTask` scores a pre-existing answer instead of calling the model under test (the judge model still runs), for judge calibration and re-scoring (see the [Quickstart](#quickstart-scaffold-a-starter-and-run-it) note).
 
-# Eval Creation
+## Eval Creation
 
 An *eval* is a folder (`eval.yaml` + `prompt.md`) describing how to score a model's output — a scoring **rubric** (an LLM judge picks one level) and/or deterministic **checks**. Evals live in `evals_kit/` by default.
 
@@ -176,7 +177,7 @@ llm-workbench evals validate             # check every eval in evals_kit/ parses
 
 For the full `eval.yaml` key list, how the judge prompt is filled and scored, and each scorer's parameters, see the [Eval Reference](docs/eval-reference.md). For guidance on *what* evals to create and how to design good rubrics, see the FAQ.
 
-# Pilot Study
+## Pilot Study
 
 In order to know how large your full experiment needs to be for statistical significance, you'll need to run a small pilot test first.
 
@@ -200,7 +201,7 @@ This writes `runs/pilot/results.jsonl`, which is the input to `llm-workbench pow
 
 A pilot is worth the cost because it uses *your* task and *your* evals; a sample size guessed from a generic effect size can be off by an order of magnitude. If you genuinely can't run one, the power tool also accepts an assumed effect size directly (see below).
 
-# Power Analysis - How Many Prompts?
+## Power Analysis - How Many Prompts?
 
 Because every prompt is run on every model, this is a **paired (repeated-measures)** design: the unit is the per-prompt difference between models. `llm-workbench power` turns a difference of a given size (effect size `dz` = mean difference / SD of differences) into the number of prompts needed to detect it reliably. Needs the `analysis` extra.
 
@@ -221,7 +222,7 @@ llm-workbench power --mean-diff 0.4 --sd-diff 0.8  # dz = 0.4 / 0.8 = 0.5, so sa
 
 > Sample sizes use the paired t-test; the Wilcoxon test used in `analyze` is ~95% as efficient, so add a small margin if you rely on it.
 
-# Prompt Test Set Creation
+## Prompt Test Set Creation
 
 Your test set is a **JSONL** file — one JSON object per line. `input` is the standard field the default task fills into your prompt template; add `expected` (used by checks like `exact_match`) and any other fields your task needs. An `id` gives each record a stable identity (used for resume); if omitted, one is generated.
 
@@ -246,7 +247,7 @@ llm-workbench dataset generate --model anthropic/claude-sonnet-4-5 \
     -n 30 --with-expected -o test_set.jsonl
 ```
 
-# Running the Experiment
+## Running the Experiment
 
 Point `run compare` at your dataset, list the candidate models, and choose the eval(s) to score with. Supply `--judge-model` to enable LLM-judge scoring.
 
@@ -285,7 +286,7 @@ Notes:
 
 **Prompts with several inputs, org/tenant scoping, retrieval, or a multi-step pipeline?** Multi-variable templates work out of the box, and anything needing extra steps is a custom `--task` — see [Complex Prompts and Custom Tasks](docs/complex-prompts-and-custom-tasks.md).
 
-## Connecting Your LLMs
+### Connecting Your LLMs
 
 Every model is referenced by a single id string, `provider/model`. The prefix selects the client:
 
@@ -323,7 +324,7 @@ llm-workbench models list                 # registered providers + example ids
 llm-workbench models ping ollama/llama3.1  # one short call, prints latency/result
 ```
 
-### Running local models (memory)
+#### Running local models (memory)
 
 `run compare` calls one model at a time, so there is no limit on how many models you compare — with API-backed models (Anthropic, OpenAI, Bedrock) the inference is remote and puts no load on your machine.
 
@@ -335,7 +336,7 @@ If your candidates and judge are all local and memory is tight:
 - Or cap Ollama's residency: `OLLAMA_MAX_LOADED_MODELS=1` and `OLLAMA_KEEP_ALIVE=0` (llm-workbench passes the latter through). This unloads models promptly at the cost of reloading between calls, so runs are slower but stay within memory.
 - Smoke-test with `--limit 2` before a full sweep, and add models incrementally — resume fills in the rest without redoing completed work.
 
-## Understanding the Output
+### Understanding the Output
 
 Each run directory (`--out-dir`) holds two data files plus, after `analyze`, the analysis artifacts.
 
@@ -372,7 +373,7 @@ The CSV covers only tasks that produced a usable output — task-level failures 
 
 **Resume** keys on `(model_id, record_id)` present in `results.jsonl` — including rows that errored. So a re-run with `--resume` (the default) skips already-recorded rows, errors included; to retry failures, fix the cause and either start a fresh `--out-dir` or delete the run directory. Give records stable `id`s so resume lines up across runs.
 
-## Result Analysis
+### Result Analysis
 
 `llm-workbench analyze` runs the statistics appropriate to your data and design (paired on prompt). Needs the `analysis` extra.
 
@@ -406,7 +407,7 @@ Options:
 | `--verbose` / `--simple` | `--simple` | Full stats (per-metric mean tables, effect sizes, complete mixed-model summary) vs. headline composite results only. |
 
 
-# Calibrating the Judge
+## Calibrating the Judge
 
 Before you trust the LLM judge's scores, check that they match your own. `llm-workbench calibrate` walks the judge's scored decisions from a run, shows you each input, the model's answer, and the judge's score + reasoning, and records your own score on the same rubric:
 
@@ -433,7 +434,7 @@ Options:
 | `--report` / `--no-report` | `--report` | Write the calibration report files alongside the console table. |
 
 
-# FAQ
+## FAQ
 * How do I decide what evals to create, and how to design the rubrics?
 A: Check out my other project, Customizing LLM Evaluations: https://github.com/skirmer/customizing-llm-evals
 
