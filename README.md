@@ -15,7 +15,7 @@ The `llm-workbench` Python library guides data scientists and machine learning p
 The toolkit supports the following tasks:
 
 * Defining your task (what your LLM needs to do)
-* Creating evals
+* Creating and calibrating evals
 * Running a small pilot study
 * Running power analysis to know how many prompts you need
 * Creating test set of prompts
@@ -435,6 +435,11 @@ Options:
 
 
 ## FAQ
-* How do I decide what evals to create, and how to design the rubrics?
+* How do I decide what evals to create, and how to design the rubrics?  
 A: Check out my other project, Customizing LLM Evaluations: https://github.com/skirmer/customizing-llm-evals
+
+## Author
+Created by Stephanie Kirmer © 2026  
+stephanie@nebulock.io
+
 
