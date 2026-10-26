@@ -10,8 +10,6 @@ from pathlib import Path
 
 import click
 
-from llm_workbench.cli.output import warn
-
 
 @click.command("analyze")
 @click.argument("results", type=click.Path(exists=True))
