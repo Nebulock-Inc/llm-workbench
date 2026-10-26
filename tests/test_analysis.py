@@ -12,9 +12,16 @@ pytest.importorskip("pandas")
 
 
 def _write_results(path):
-    """3 models x 8 prompts: a graded judge metric (clear ordering) + a binary metric."""
-    judge = {"m1": [5, 5, 4, 5, 4, 5, 4, 5], "m2": [4, 3, 4, 3, 4, 3, 4, 3], "m3": [2, 3, 2, 2, 3, 2, 3, 2]}
-    passes = {"m1": [1, 1, 1, 1, 1, 1, 1, 0], "m2": [1, 0, 1, 0, 1, 0, 1, 0], "m3": [0, 0, 1, 0, 0, 0, 1, 0]}
+    """3 models x 8 prompts: a graded judge metric (clear ordering) + a binary metric.
+
+    The columns rise and fall together (a shared per-prompt difficulty), which gives
+    the per-prompt random intercept real variance — without it the mixed-model fit is
+    near-singular and raises LinAlgError on Linux (OpenBLAS), though macOS (Accelerate)
+    tolerates it. The model gaps also vary slightly across prompts so the paired
+    differences aren't perfectly constant (a constant gap makes Cohen's dz undefined).
+    """
+    judge = {"m1": [5, 4, 3, 5, 5, 3, 5, 5], "m2": [4, 3, 2, 4, 3, 2, 4, 3], "m3": [4, 2, 1, 3, 2, 2, 3, 2]}
+    passes = {"m1": [1, 1, 0, 1, 1, 0, 1, 1], "m2": [1, 0, 0, 1, 0, 0, 1, 0], "m3": [1, 0, 0, 0, 0, 0, 0, 0]}
     lines = []
     for model in ("m1", "m2", "m3"):
         for i in range(8):
@@ -156,22 +163,23 @@ def test_run_analysis_simple_is_leaner(tmp_path):
 
 
 def test_exclude_metric_from_aggregate(tmp_path):
-    import random
-
     from llm_workbench.analysis.report import run_analysis
 
-    random.seed(1)
+    # Columns rise/fall together (shared per-prompt difficulty) so the random
+    # intercept has real variance; model gaps vary slightly across prompts so
+    # residual variance is non-zero. Both keep the mixed-model fit numerically
+    # stable on all BLAS backends. Quality separates the models; Refusal is
+    # prompt-driven and roughly model-flat.
+    quality = {"m1": [5, 4, 3, 5, 5, 3, 5, 5], "m2": [4, 3, 2, 4, 3, 2, 4, 3], "m3": [4, 2, 1, 3, 2, 2, 3, 2]}
+    refusal = {"m1": [4, 3, 2, 4, 3, 2, 4, 3], "m2": [4, 3, 2, 4, 4, 2, 3, 3], "m3": [3, 3, 2, 4, 3, 2, 4, 2]}
     lines = []
     for model in ("m1", "m2", "m3"):
-        base = {"m1": 4.5, "m2": 3.5, "m3": 2.5}[model]
         for i in range(8):
-            q = max(1, min(5, round(random.gauss(base, 0.6))))
-            r = max(1, min(5, round(random.gauss(3, 0.6))))
             lines.append(json.dumps({
                 "model_id": f"mock/{model}", "record_id": f"q{i}", "input": {}, "output": "x",
                 "prompt": "p", "latency_s": 0.1, "usage": {}, "error": None,
-                "scores": [{"eval": "Quality", "scorer": "judge", "score": float(q), "error": None},
-                           {"eval": "Refusal", "scorer": "judge", "score": float(r), "error": None}]}))
+                "scores": [{"eval": "Quality", "scorer": "judge", "score": float(quality[model][i]), "error": None},
+                           {"eval": "Refusal", "scorer": "judge", "score": float(refusal[model][i]), "error": None}]}))
     (tmp_path / "results.jsonl").write_text("\n".join(lines) + "\n")
 
     rep = run_analysis(tmp_path, reference="mock/m1", make_plots=False, exclude_metrics=["Refusal"])
