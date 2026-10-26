@@ -229,3 +229,6 @@ docs/plans/
 
 # Rendered whitepaper PDF — the notebook (docs/whitepaper.ipynb) is the source of truth
 docs/whitepaper.pdf
+
+# MkDocs build output
+site/
