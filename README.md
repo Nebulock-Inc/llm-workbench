@@ -55,7 +55,7 @@ llm-workbench --help
 
 The workflow follows the sections below: **define your task → create evals → run a small pilot → size the study with power analysis → build the full test set → run the comparison → analyze the results.**
 
-![Architecture overview: the llm-workbench experiment pipeline, from task definition through evals, pilot, power analysis, running the comparison, and result analysis](docs/architecture-overview.png)
+![Architecture overview: the llm-workbench experiment pipeline, from task definition through evals, pilot, power analysis, running the comparison, and result analysis](docs/visuals/architecture-overview.png)
 
 Read on to learn how to use it for all these steps.
 
@@ -413,7 +413,13 @@ The CSV covers only tasks that produced a usable output — task-level failures 
 llm-workbench analyze runs/experiment-1 --reference anthropic/claude-sonnet-4-5
 ```
 
+![Analysis report, first two tables](docs/visuals/report_top.png)
+
+
 It first reports **reliability** — each model's task-completion rate (fraction of prompts that produced a usable answer, computed from every recorded row including failures). This matters because the quality stats below are complete-case: they only cover prompts a model actually answered, so a model that fails often can still post strong quality scores. Read reliability and quality together.
+
+
+![Analysis mixed effects model, terminal view](docs/visuals/terminal_mlm.png)
 
 It then shows an overall means table per model and a mean-score table for each individual metric. The full statistical battery runs on a single **quality composite** (the aggregate across quality metrics) — one family of tests on the aggregate, rather than per-metric, to keep the multiple-comparisons story clean. If you want to drill into a single metric, filter with `--eval` / `--scorer` and re-run. On the composite it reports where appropriate:
 
