@@ -14,13 +14,13 @@ The `llm-workbench` Python library guides data scientists and machine learning p
 
 The toolkit supports the following tasks:
 
-* Defining your task (what your LLM needs to do)
-* Creating and calibrating evals
-* Running a small pilot study
-* Running power analysis to know how many prompts you need
-* Creating test set of prompts
-* Running the experiment, collecting prompt/response pairs using LLMs from Anthropic, OpenAI, Ollama, or AWS Bedrock (including Bedrock Mantle)
-* Analyzing the results, selecting the best model for your use case
+* [Defining your task](#defining-your-task) (what your LLM needs to do)
+* [Creating](#eval-creation) and [calibrating](#calibrating-the-judge) evals
+* Running a small [pilot study](#pilot-study)
+* Running [power analysis](#power-analysis---how-many-prompts) to know how many prompts you need
+* Creating a [test set of prompts](#prompt-test-set-creation)
+* [Running the experiment](#running-the-experiment), collecting prompt/response pairs using LLMs from Anthropic, OpenAI, Ollama, or AWS Bedrock (including Bedrock Mantle)
+* [Analyzing the results](#result-analysis), selecting the best model for your use case
 
 
 

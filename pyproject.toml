@@ -1,6 +1,6 @@
 [project]
 name = "llm-workbench"
-version = "0.1.0"
+version = "0.1.1"
 description = "Framework for testing the best LLM for your task"
 readme = "README.md"
 license = "MIT"
