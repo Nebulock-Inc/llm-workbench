@@ -104,7 +104,7 @@ def run_comparison(
                     score_rows.append(ScoreRow(eval=spec.name, scorer=res.scorer, score=res.score,
                                                label=res.label, passed=res.passed,
                                                reasoning=res.reasoning, error=res.error,
-                                               not_applicable=res.not_applicable))
+                                               not_applicable=res.not_applicable, weight=spec.weight))
 
             resp = out.response
             append_jsonl(results_path, RunResult(

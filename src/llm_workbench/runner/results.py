@@ -35,6 +35,7 @@ class ScoreRow:
     reasoning: str | None = None
     error: str | None = None
     not_applicable: bool = False  # scorer did not apply to this row (vs. failed); see write_csv
+    weight: float = 1.0  # eval's relative weight in the analysis composite (from EvalSpec.weight)
 
 
 @dataclass

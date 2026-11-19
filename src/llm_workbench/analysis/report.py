@@ -41,7 +41,7 @@ def _means_table(matrix, reference: str, title: str) -> Table:
     return table
 
 
-def _analyze_matrix(matrix, *, reference, alpha, margin, mixed_long, verbose=False):
+def _analyze_matrix(matrix, *, reference, alpha, margin, mixed_long, with_metric=True, verbose=False):
     """Run the full statistical battery on the graded quality-composite matrix.
 
     Means, Cohen's d, and TOST use each model's / each pair's available prompts (skipna);
@@ -87,7 +87,7 @@ def _analyze_matrix(matrix, *, reference, alpha, margin, mixed_long, verbose=Fal
                         f"(higher: {_short(row['higher'])})")
 
     # --- Mixed-effects model ----------------------------------------------
-    mm = S.mixed_model(mixed_long, reference=reference, alpha=alpha, with_metric=True)
+    mm = S.mixed_model(mixed_long, reference=reference, alpha=alpha, with_metric=with_metric)
     report["mixed_model"] = {"reference": mm.reference, "formula": mm.formula,
                              "error": mm.error, "effects": mm.effects,
                              "summary_text": mm.summary_text}
@@ -143,7 +143,7 @@ def _reliability_table(rows: list[dict]) -> Table:
 
 def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_dir=None,
                  make_plots=True, eval_filter=None, scorer_filter=None, exclude_metrics=None,
-                 standardize: bool = True, verbose: bool = False) -> dict:
+                 standardize: bool = True, weights=None, verbose: bool = False) -> dict:
     from llm_workbench.analysis import frame
 
     excluded = set(exclude_metrics or ())
@@ -162,6 +162,14 @@ def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_di
         long_df = long_df[long_df["scorer"].isin(set(scorer_filter))]
     if long_df.empty:
         raise ValueError("No rows left after --eval/--scorer filters.")
+
+    # CLI --weight overrides the per-eval weight recorded in results.jsonl, letting a run
+    # be re-weighted without re-running. Applied after the filters so it only touches rows
+    # still in play; an unknown eval name is a no-op match (reported below).
+    if weights:
+        long_df = long_df.copy()
+        for ev, w in weights.items():
+            long_df.loc[long_df["eval"] == ev, "weight"] = w
 
     models = sorted(long_df["model"].unique())
     if len(models) < 2:
@@ -190,6 +198,8 @@ def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_di
                        f"all in SD units (margin ±{margin} SD).[/dim]")
 
     # Overall performance per model over quality metrics (matches calculate_overall_means).
+    # This descriptive table is a raw, unweighted per-metric mean on purpose; eval weights
+    # apply only to the composite and the inferential battery built on it below.
     quality_rows = frame.aggregate_rows(long_df, excluded)
     if not quality_rows.empty:
         om = quality_rows.groupby("model")["score"].agg(["mean", "std", "count"]).sort_values(
@@ -225,9 +235,21 @@ def run_analysis(results_path, *, reference=None, alpha=0.05, margin=0.2, out_di
     composite = frame.composite_quality(long_df, excluded, standardize=standardize)
     if composite is not None and composite.shape[1] >= 2 and len(composite) >= 2:
         _console.print("\n[bold cyan]Mixed Effects Model Results[/bold cyan]")
+        # statsmodels' MixedLM can't take per-observation weights, so unequal eval weights
+        # are honored by fitting the already-weighted composite (one row per prompt x model,
+        # score ~ C(model)) instead of the per-metric rows. With uniform weights we keep the
+        # richer per-metric fit (score ~ C(model) + C(metric)) unchanged.
+        pooled = frame.pooled_rows(long_df, excluded, standardize=standardize)
+        if pooled["weight"].nunique() > 1:
+            mixed_long = composite.reset_index().melt(
+                id_vars="prompt_id", var_name="model", value_name="score").dropna(subset=["score"])
+            with_metric = False
+        else:
+            mixed_long = pooled
+            with_metric = True
         report["composite"] = _analyze_matrix(
             composite, reference=reference, alpha=alpha, margin=margin,
-            mixed_long=frame.pooled_rows(long_df, excluded, standardize=standardize), verbose=verbose)
+            mixed_long=mixed_long, with_metric=with_metric, verbose=verbose)
 
 
         if verbose:

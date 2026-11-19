@@ -115,6 +115,34 @@ def test_scorers_only_eval_is_valid(tmp_path):
     assert len(spec.scorers) == 1 and spec.scorers[0].type == "exact_match"
 
 
+def test_weight_defaults_to_one(tmp_path):
+    d = _make(tmp_path / "e", "name: Q\nlabels:\n  a: 1\nprompt: 'x {input}'\n")
+    assert load_spec(d).weight == 1.0
+
+
+def test_weight_parsed(tmp_path):
+    d = _make(tmp_path / "e", "name: Q\nweight: 2.5\nlabels:\n  a: 1\nprompt: 'x {input}'\n")
+    assert load_spec(d).weight == 2.5
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "true", "abc"])
+def test_bad_weight_rejected(tmp_path, value):
+    # A non-positive, boolean, or non-numeric weight is meaningless as a relative multiplier.
+    d = _make(tmp_path / "e", f"name: Q\nweight: {value}\nlabels:\n  a: 1\nprompt: 'x {{input}}'\n")
+    with pytest.raises(EvalSpecError, match="weight"):
+        load_spec(d)
+
+
+def test_weight_roundtrips_and_default_omitted(tmp_path):
+    weighted = write_spec(dest_dir=tmp_path / "w", name="W", description="",
+                          labels={"g": 1}, prompt="p {input}", weight=3.0)
+    assert weighted.weight == 3.0
+    assert "weight: 3" in (tmp_path / "w" / "eval.yaml").read_text()
+
+    write_spec(dest_dir=tmp_path / "d", name="D", description="", labels={"g": 1}, prompt="p {input}")
+    assert "weight" not in (tmp_path / "d" / "eval.yaml").read_text()  # default stays implicit
+
+
 def test_write_spec_roundtrip_and_force(tmp_path):
     dest = tmp_path / "myeval"
     spec = write_spec(dest_dir=dest, name="MyEval", description="d",

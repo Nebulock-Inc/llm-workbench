@@ -118,6 +118,83 @@ def test_load_long_drops_operational_scorers(tmp_path):
     assert "E / latency" not in set(df["metric"])
 
 
+def _write_two_eval_results(path, *, weight_a=1.0, weight_b=1.0):
+    """2 models x 4 prompts, two judge evals A and B that disagree, carrying weights.
+
+    A favors m1, B favors m2, so the weighted composite tilts toward whichever eval
+    carries the larger weight — letting a test pin the weighted-mean arithmetic.
+    """
+    a = {"m1": [5, 4, 5, 4], "m2": [2, 1, 2, 1]}
+    b = {"m1": [1, 2, 1, 2], "m2": [4, 5, 4, 5]}
+    lines = []
+    for model in ("m1", "m2"):
+        for i in range(4):
+            lines.append(json.dumps({
+                "model_id": f"mock/{model}", "record_id": f"q{i}", "input": {}, "output": "x",
+                "prompt": "p", "latency_s": 0.1, "usage": {}, "error": None,
+                "scores": [
+                    {"eval": "A", "scorer": "judge", "score": float(a[model][i]), "weight": weight_a, "error": None},
+                    {"eval": "B", "scorer": "judge", "score": float(b[model][i]), "weight": weight_b, "error": None},
+                ]}))
+    path.write_text("\n".join(lines) + "\n")
+    return path
+
+
+def test_load_long_defaults_weight_when_absent(tmp_path):
+    """Pre-weight result files (no 'weight' key) load as weight 1.0 — backward compatible."""
+    from llm_workbench.analysis.frame import load_long
+
+    df = load_long(_write_results(tmp_path / "results.jsonl"))  # _write_results emits no weight
+    assert (df["weight"] == 1.0).all()
+
+
+def test_weighted_composite_is_weighted_mean(tmp_path):
+    from llm_workbench.analysis.frame import composite_quality, load_long
+
+    df = load_long(_write_two_eval_results(tmp_path / "results.jsonl", weight_a=3.0, weight_b=1.0))
+    comp = composite_quality(df, standardize=False)  # raw scale so the arithmetic is checkable
+    # m1/q0: A=5 (w3), B=1 (w1) -> (15 + 1) / 4 = 4.0  (a plain mean would be 3.0)
+    assert comp.loc["q0", "mock/m1"] == pytest.approx(4.0)
+
+
+def test_uniform_weight_matches_plain_mean(tmp_path):
+    from llm_workbench.analysis.frame import composite_quality, load_long
+
+    df = load_long(_write_two_eval_results(tmp_path / "results.jsonl"))  # all weights 1.0
+    comp = composite_quality(df, standardize=False)
+    assert comp.loc["q0", "mock/m1"] == pytest.approx(3.0)  # (5 + 1) / 2, i.e. the plain mean
+
+
+def test_weighted_mixed_model_fits_composite(tmp_path):
+    """Non-uniform eval weights switch the mixed model to the weighted composite fit."""
+    from llm_workbench.analysis.report import run_analysis
+
+    # Same numerically-stable two-judge data as the exclude test; weight Quality over Refusal.
+    quality = {"m1": [5, 4, 3, 5, 5, 3, 5, 5], "m2": [4, 3, 2, 4, 3, 2, 4, 3], "m3": [4, 2, 1, 3, 2, 2, 3, 2]}
+    refusal = {"m1": [4, 3, 2, 4, 3, 2, 4, 3], "m2": [4, 3, 2, 4, 4, 2, 3, 3], "m3": [3, 3, 2, 4, 3, 2, 4, 2]}
+    lines = []
+    for model in ("m1", "m2", "m3"):
+        for i in range(8):
+            lines.append(json.dumps({
+                "model_id": f"mock/{model}", "record_id": f"q{i}", "input": {}, "output": "x",
+                "prompt": "p", "latency_s": 0.1, "usage": {}, "error": None,
+                "scores": [
+                    {"eval": "Quality", "scorer": "judge", "score": float(quality[model][i]), "weight": 3.0, "error": None},
+                    {"eval": "Refusal", "scorer": "judge", "score": float(refusal[model][i]), "weight": 1.0, "error": None}]}))
+    (tmp_path / "results.jsonl").write_text("\n".join(lines) + "\n")
+
+    rep = run_analysis(tmp_path, reference="mock/m1", make_plots=False)
+    mm = rep["composite"]["mixed_model"]
+    assert mm["error"] is None
+    assert mm["formula"] == "score ~ C(model)"       # weighted -> composite-level fit, no C(metric)
+    assert len(mm["effects"]) == 2                   # m2, m3 vs reference m1
+
+    # A --weight override of 1 for every eval reproduces the unweighted per-metric fit.
+    rep_flat = run_analysis(tmp_path, reference="mock/m1", make_plots=False,
+                            weights={"Quality": 1.0, "Refusal": 1.0})
+    assert rep_flat["composite"]["mixed_model"]["formula"] == "score ~ C(model) + C(metric)"
+
+
 def test_run_analysis_verbose_reports_all_tests(tmp_path):
     from llm_workbench.analysis.report import run_analysis
 
@@ -239,6 +316,22 @@ def test_cli_analyze(tmp_path):
     result = CliRunner().invoke(cli, ["analyze", str(tmp_path), "--no-plots"])
     assert result.exit_code == 0, result.output
     assert (tmp_path / "analysis.json").is_file()
+
+
+def test_cli_analyze_weight_override(tmp_path):
+    from click.testing import CliRunner
+
+    from llm_workbench.cli.main import cli
+
+    _write_results(tmp_path / "results.jsonl")  # single eval "E"
+    ok = CliRunner().invoke(cli, ["analyze", str(tmp_path), "--no-plots", "--weight", "E=2"])
+    assert ok.exit_code == 0, ok.output
+
+    bad = CliRunner().invoke(cli, ["analyze", str(tmp_path), "--no-plots", "--weight", "E=oops"])
+    assert bad.exit_code != 0 and "not a number" in bad.output
+
+    nonpos = CliRunner().invoke(cli, ["analyze", str(tmp_path), "--no-plots", "--weight", "E=0"])
+    assert nonpos.exit_code != 0 and "must be > 0" in nonpos.output
 
 
 # --- power analysis ------------------------------------------------------
