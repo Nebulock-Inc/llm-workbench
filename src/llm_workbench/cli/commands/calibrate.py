@@ -107,7 +107,7 @@ def _render(d: dict, idx: int, total: int, *, full: bool, review_context=None) -
     console.print(Panel(body, title="judge decision", title_align="left", border_style="magenta"))
 
 
-_HELP = "enter a number = your score · [a]gree with judge · [s]kip · [o] full answer · [q]uit & save"
+_HELP = r"enter a number = your score · \[a]gree with judge · \[s]kip · \[o]full answer · \[q]uit & save"
 
 
 @click.command("calibrate")
