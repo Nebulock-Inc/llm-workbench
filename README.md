@@ -452,6 +452,9 @@ Before you trust the LLM judge's scores, check that they match your own. `llm-wo
 ```bash
 llm-workbench calibrate runs/experiment-1
 ```
+![Calibration UI](docs/visuals/calibration_tui.png)
+
+
 
 It's resumable (already-reviewed decisions are skipped unless `--re-review`) and saves your scores to `<run>/review.jsonl`. At the end — or any time with `--stats` — it reports judge-vs-human **calibration** per eval: **bias** (mean judge − mean human; positive means the judge scores higher than you), plus exact- and within-1-agreement rates. A large bias or low agreement is a signal to revise the rubric or judge prompt before drawing conclusions from a run.
 
