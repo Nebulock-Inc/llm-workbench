@@ -1,0 +1,10 @@
+{
+  "name": "llm-workbench",
+  "metadata": {"description": "Guided Claude Code skills for running llm-workbench model evaluations."},
+  "owner": {"name": "Nebulock"},
+  "plugins": [{
+    "name": "llm-workbench",
+    "source": "./plugins/llm-workbench",
+    "description": "Set up and connect models, define a task, create and calibrate evals, build a test set, run a pilot, size the study with power analysis, run the full comparison, and analyze the results to pick the best model."
+  }]
+}
