@@ -439,7 +439,7 @@ Options:
 
 ## Calibrating the Judge
 
-Before you trust the LLM judge's scores, check that they match your own. `llm-workbench calibrate` walks the judge's scored decisions from a run, shows you each input, the model's answer, and the judge's score + reasoning, and records your own score on the same rubric:
+Before you trust the LLM judge's scores, check that they match your own. `llm-workbench calibrate` walks the judge's scored decisions from a run, shows you each input, the model's answer (including aux fields), and the judge's score + reasoning, and records your own score on the same rubric:
 
 ```bash
 llm-workbench calibrate runs/experiment-1
