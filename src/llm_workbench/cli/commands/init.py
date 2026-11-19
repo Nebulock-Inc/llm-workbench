@@ -38,12 +38,21 @@ def _copy_tree(src, dest: Path, *, force: bool, written: list[Path], skipped: li
 @click.command("init")
 @click.argument("directory", default=".", required=False)
 @click.option("--force", is_flag=True, help="Overwrite files that already exist.")
-def init(directory: str, force: bool) -> None:
+@click.option(
+    "--with-skills",
+    is_flag=True,
+    help="Also scaffold Claude Code skills into .claude/skills/ (load automatically in Claude Code).",
+)
+def init(directory: str, force: bool, with_skills: bool) -> None:
     """Scaffold a starter dataset, prompt, and eval into DIRECTORY (default: current dir).
 
     Writes a tiny, self-contained example — a prompt template (prompt.txt), a
     small dataset (dataset.jsonl), and one judge eval (evals_kit/example-helpfulness)
     — so you can run the quickstart against files you own and edit.
+
+    With --with-skills, also writes the Claude Code skills (and their shared references)
+    that guide you through the whole workflow into .claude/, so they load automatically
+    when the project is opened in Claude Code.
     """
     dest = Path(directory)
     starter = files("llm_workbench") / "_starter"
@@ -51,6 +60,13 @@ def init(directory: str, force: bool) -> None:
     written: list[Path] = []
     skipped: list[Path] = []
     _copy_tree(starter, dest, force=force, written=written, skipped=skipped)
+
+    # The skills tree mirrors the plugin layout (skills/ + references/ as siblings) so the
+    # `../../references/...` links in each SKILL.md resolve the same under .claude/ as they do
+    # when the same files are installed as a Claude Code plugin.
+    if with_skills:
+        skills = files("llm_workbench") / "_skills"
+        _copy_tree(skills, dest / ".claude", force=force, written=written, skipped=skipped)
 
     heading("Scaffolded starter files")
     for path in written:
@@ -77,3 +93,10 @@ def init(directory: str, force: bool) -> None:
         "      --model ollama/llama3.1 --eval example-helpfulness \\\n"
         "      --judge-model ollama/llama3.1 --out-dir runs/example"
     )
+
+    if with_skills:
+        teach(
+            "\nClaude Code skills were written to .claude/skills/. Open this project in "
+            "Claude Code and ask, e.g. \"which model should I use for my task?\" to be guided "
+            "through setup, evals, a pilot, power analysis, the full run, and the analysis."
+        )

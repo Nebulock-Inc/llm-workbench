@@ -18,6 +18,7 @@ define a judge (`labels` + a prompt) and/or a non-empty `scorers` list.
 | `prompt` | string | `""` | Inline judge prompt template. Use this **or** `prompt_file`, not both. |
 | `prompt_file` | path | `prompt.md` | File holding the judge prompt template (relative to the eval folder). If neither `prompt` nor `prompt_file` is set, a sibling `prompt.md` is used when present. |
 | `direction` | `MAXIMIZE`/`MINIMIZE`/`NONE` | `MAXIMIZE` | Whether higher scores are better — used by the analysis. |
+| `weight` | float `> 0` | `1.0` | Relative influence of this eval in the analysis composite (see below). A weight-3 eval counts 3× a weight-1 eval; the default leaves all evals equal. |
 | `use_structured_output` | bool | `false` | Reserved flag for structured-output judging; the default judge parses `SCORE:`/`REASONING:` text. |
 | `scorers` | list | `[]` | Programmatic / operational scorers (see below). Each entry: `type`, optional `expected_field`, optional `params`. |
 
@@ -34,6 +35,23 @@ to reply `SCORE: <n>` / `REASONING: <text>`. The parser reads that score, **snap
 the nearest legal rubric score**, and records the matching `label`. The judge reports a
 graded `score` (and `label`), **not** a `passed` flag — pass rates come only from the
 scorers below.
+
+### Weighting an eval in the analysis
+
+The `analyze` step pools every eval into one **quality composite** and runs the mixed
+effects model (and the rest of the battery) on it. By default each eval contributes
+equally. Set `weight` to make an eval count more or less — the composite becomes a
+weighted mean, so a `weight: 3` eval pulls the composite three times as hard as a
+`weight: 1` eval. The weight is recorded into `results.jsonl` at run time, so a run
+carries the weights it was defined with.
+
+Because statsmodels' mixed model can't take per-observation weights, **non-uniform
+weights change how the mixed model is fit**: it fits the weighted composite directly
+(`score ~ C(model)`, random intercept per prompt) instead of the per-metric rows
+(`score ~ C(model) + C(metric)`). With all weights equal the per-metric fit is
+unchanged. The model's formula is printed in the analysis output so you can see which
+ran. To re-weight an existing run without re-running, pass `analyze --weight <eval>=<n>`
+(repeatable); it overrides the recorded weight.
 
 ## Scorers (`scorers:` list)
 

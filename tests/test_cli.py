@@ -122,6 +122,24 @@ def test_init_scaffolds_starter(tmp_path):
     assert (tmp_path / "evals_kit" / "example-helpfulness" / "prompt.md").is_file()
 
 
+def test_init_without_skills_omits_claude_dir(tmp_path):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_init_with_skills_scaffolds_claude_skills(tmp_path):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", str(tmp_path), "--with-skills"])
+    assert result.exit_code == 0, result.output
+    skills = tmp_path / ".claude" / "skills"
+    assert (skills / "evaluate-models" / "SKILL.md").is_file()
+    assert (skills / "setup" / "SKILL.md").is_file()
+    # shared references land where the SKILL.md `../../references/...` links resolve
+    assert (tmp_path / ".claude" / "references" / "cli-cheatsheet.md").is_file()
+
+
 def test_init_skips_existing_without_force(tmp_path):
     runner = CliRunner()
     assert runner.invoke(cli, ["init", str(tmp_path)]).exit_code == 0

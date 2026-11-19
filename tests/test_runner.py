@@ -23,9 +23,9 @@ def _dataset(tmp_path):
     return path
 
 
-def _spec(tmp_path):
+def _spec(tmp_path, weight=1.0):
     return write_spec(dest_dir=tmp_path / "e", name="Help", description="",
-                      labels={"good": 5, "bad": 1}, prompt="Q {input} A {output}")
+                      labels={"good": 5, "bad": 1}, prompt="Q {input} A {output}", weight=weight)
 
 
 def test_read_jsonl(tmp_path):
@@ -52,13 +52,16 @@ def test_run_comparison_writes_results_and_summarizes(tmp_path):
         task=PromptTemplateTask("Q: {input}"),
         dataset_path=_dataset(tmp_path),
         model_ids=["mock/echo"],
-        specs=[_spec(tmp_path)],
+        specs=[_spec(tmp_path, weight=2.0)],
         judge_model="mock/canned:SCORE: 5",
         out_dir=out,
         on_event=lambda kind, model, rid: events.append(kind),
     )
     assert events.count("done") == 2
-    assert len(_read_results(out / "results.jsonl")) == 2
+    records = _read_results(out / "results.jsonl")
+    assert len(records) == 2
+    # The eval's weight is recorded onto each score row so the analysis is self-contained.
+    assert all(s["weight"] == 2.0 for r in records for s in r["scores"])
     assert (out / "results.csv").is_file()
     assert load_completed(out) == {("mock/echo", "q1"), ("mock/echo", "q2")}
 

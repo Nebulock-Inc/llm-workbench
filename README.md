@@ -45,6 +45,8 @@ Extras keep the base install light; add the ones you need:
 
 Combine them as needed, e.g. `uv add "llm-workbench[analysis,anthropic]"`.
 
+Using conda instead of uv? It works, with a few project-specific caveats — see [Installing with conda](docs/installing-with-conda.md).
+
 Everything is driven by one CLI, `llm-workbench` (verify the install):
 
 ```bash
@@ -101,6 +103,36 @@ A built-in task, `--task llm_workbench.tasks:ReplayTask`, scores an answer alrea
 record instead of calling the model under test — for calibrating the judges, regression-testing
 a rubric or judge-model change, or re-scoring a past run. See
 [Replaying stored outputs](docs/complex-prompts-and-custom-tasks.md#replaying-stored-outputs-judge-calibration--re-scoring).
+
+## Guided workflow with Claude Code skills
+
+If you use [Claude Code](https://claude.com/claude-code), this toolkit ships a set of skills
+that guide you through the whole workflow — setup, defining a task, creating and calibrating
+evals, a pilot, power analysis, the full run, and the analysis. They drive the CLI *and*
+explain how to read the results, so you can lean on them instead of the manual steps below.
+Open your project in Claude Code and ask something like *"which model should I use for my
+task?"* — the guide takes it from there.
+
+Get them one of two ways:
+
+- **Into your project (recommended)** — scaffold them alongside the starter files:
+
+  ```bash
+  llm-workbench init --with-skills
+  ```
+
+  This writes them to `.claude/skills/`, where Claude Code loads them automatically when you
+  open the project. Re-run with `--force` to refresh them after upgrading the package.
+
+- **As a plugin, shared across all your projects** — install from the Claude Code plugin
+  marketplace:
+
+  ```
+  /plugin marketplace add Nebulock-Inc/llm-workbench
+  /plugin install llm-workbench
+  ```
+
+The rest of this README is the manual walkthrough the skills follow.
 
 ## Defining Your Task
 
@@ -409,7 +441,7 @@ Options:
 
 ## Calibrating the Judge
 
-Before you trust the LLM judge's scores, check that they match your own. `llm-workbench calibrate` walks the judge's scored decisions from a run, shows you each input, the model's answer, and the judge's score + reasoning, and records your own score on the same rubric:
+Before you trust the LLM judge's scores, check that they match your own. `llm-workbench calibrate` walks the judge's scored decisions from a run, shows you each input, the model's answer (including aux fields), and the judge's score + reasoning, and records your own score on the same rubric:
 
 ```bash
 llm-workbench calibrate runs/experiment-1

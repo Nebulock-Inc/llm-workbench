@@ -45,7 +45,7 @@ def _read_records(results_path: str | Path) -> list[dict]:
 
 
 def load_long(results_path: str | Path) -> pd.DataFrame:
-    """Explode results.jsonl into rows of (model, prompt_id, eval, scorer, metric, score, kind).
+    """Explode results.jsonl into rows of (model, prompt_id, eval, scorer, metric, score, weight, kind).
 
     Deduped to the most recent run per (model, prompt); rows with a missing score or a
     scorer error are dropped (they can't enter the stats). Operational scorers (latency)
@@ -65,6 +65,7 @@ def load_long(results_path: str | Path) -> pd.DataFrame:
                 "scorer": score["scorer"],
                 "metric": f"{score['eval']} / {score['scorer']}",
                 "score": float(score["score"]),
+                "weight": float(score.get("weight", 1.0)),  # absent in pre-weight result files -> 1.0
             })
     if not rows:
         raise ValueError(f"No numeric scores found in {results_path}. Nothing to analyze.")
@@ -159,14 +160,18 @@ def pooled_rows(long_df: pd.DataFrame, exclude: set[str] | None = None, *,
 
 def composite_quality(long_df: pd.DataFrame, exclude: set[str] | None = None, *,
                       standardize: bool = True) -> pd.DataFrame | None:
-    """Prompt x model matrix of the quality composite: mean over the pooled metrics.
+    """Prompt x model matrix of the quality composite: weighted mean over the pooled metrics.
 
-    Returns None when no metrics remain. Not complete-cased (NaN where a model has no
-    composite for a prompt); callers skipna per model/pair, complete-casing only for the
-    Friedman omnibus. See `pooled_rows` for which metrics are included and whether they are
-    z-scored (`standardize`).
+    Each cell is sum(score * weight) / sum(weight) over that (prompt, model)'s metrics, so
+    an eval carrying a higher `weight` (from eval.yaml) pulls the composite toward its
+    scores. With all weights equal (the default) this is the plain mean, so unweighted runs
+    are unchanged. Returns None when no metrics remain. Not complete-cased (NaN where a model
+    has no composite for a prompt); callers skipna per model/pair, complete-casing only for
+    the Friedman omnibus. See `pooled_rows` for which metrics are included and whether they
+    are z-scored (`standardize`).
     """
     rows = pooled_rows(long_df, exclude, standardize=standardize)
     if rows.empty:
         return None
-    return rows.groupby(["prompt_id", "model"])["score"].mean().unstack()
+    grouped = rows.assign(_ws=rows["score"] * rows["weight"]).groupby(["prompt_id", "model"])
+    return (grouped["_ws"].sum() / grouped["weight"].sum()).unstack()

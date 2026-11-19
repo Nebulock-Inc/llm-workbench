@@ -9,6 +9,7 @@ within-1 agreement) per eval.
 
 from __future__ import annotations
 
+import json
 import math
 from datetime import UTC, datetime
 from pathlib import Path
@@ -85,6 +86,19 @@ def _render(d: dict, idx: int, total: int, *, full: bool, review_context=None) -
     if not full and len(out) > 1800:
         out = out[:1800] + f"\n… [{len(d['output']) - 1800} more chars — press 'o' for full]"
     console.print(Panel(out, title="model answer", title_align="left", border_style="green"))
+
+    # Task-derived fields. When `output` is a terse check-target and the rubric judges prose
+    # kept in aux, this panel is where the reviewer actually sees what the judge scored.
+    aux = d.get("aux") or {}
+    if aux:
+        blocks = []
+        for k, v in aux.items():
+            text = v if isinstance(v, str) else json.dumps(v, default=str, ensure_ascii=False)
+            if not full and len(text) > 800:
+                text = text[:800] + f"\n… [{len(text) - 800} more chars — press 'o' for full]"
+            blocks.append(f"[bold]{k}[/bold]\n{text}")
+        console.print(Panel("\n\n".join(blocks), title="task aux", title_align="left",
+                            border_style="cyan"))
 
     js, jl = d.get("judge_score"), d.get("judge_label")
     body = f"[bold]score {js}[/bold]" + (f"  ·  {jl}" if jl else "")

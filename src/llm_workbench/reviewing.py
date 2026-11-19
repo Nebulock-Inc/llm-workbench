@@ -59,6 +59,10 @@ def judge_decisions(
                 "input": r.get("input"),
                 "output": r.get("output"),
                 "prompt": r.get("prompt"),
+                # Task-derived values the rubric may judge (e.g. prose kept out of the
+                # terse `output` so a deterministic check can use `output`). Carried here
+                # so the calibration UI can show the reviewer what the judge actually saw.
+                "aux": r.get("aux") or {},
             })
     return decisions
 

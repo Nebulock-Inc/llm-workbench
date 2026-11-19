@@ -19,7 +19,7 @@ from llm_workbench.evals.template import find_variables
 KNOWN_KEYS = {
     "name", "description", "labels", "prompt", "prompt_file",
     "direction", "use_structured_output", "scorers", "ground_truth",
-    "requires_aux",
+    "requires_aux", "weight",
 }
 
 
@@ -76,6 +76,9 @@ class EvalSpec(BaseModel):
                                                             # missing/blank the row is SKIPPED (scored
                                                             # as an error so it drops out of the stats),
                                                             # letting an eval scope to a subset of rows
+    weight: float = 1.0                                     # relative influence in the analysis composite
+                                                            # (and thus the mixed model). A weight-3 eval
+                                                            # counts 3x a weight-1 eval. Must be > 0.
     variables: tuple[str, ...] = ()                         # {placeholders} in the prompt
     source_dir: Path | None = None
 
@@ -200,6 +203,15 @@ def load_spec(path: str | Path) -> EvalSpec:
         )
     requires_aux = (requires_aux_raw.strip() or None) if requires_aux_raw is not None else None
 
+    # weight scales this eval's influence in the analysis composite. Reject a bool
+    # (YAML `true`/`false` are ints) and any non-number, and require it strictly
+    # positive — a zero/negative weight has no meaning as a relative multiplier.
+    weight_raw = raw.get("weight", 1.0)
+    if isinstance(weight_raw, bool) or not isinstance(weight_raw, (int, float)):
+        raise EvalSpecError(f"{path}: 'weight' must be a positive number, got {weight_raw!r}.")
+    if weight_raw <= 0:
+        raise EvalSpecError(f"{path}: 'weight' must be > 0, got {weight_raw!r}.")
+
     try:
         return EvalSpec(
             name=str(raw["name"]),
@@ -211,6 +223,7 @@ def load_spec(path: str | Path) -> EvalSpec:
             scorers=[ScorerSpec(**s) for s in scorers],
             ground_truth=ground_truth,
             requires_aux=requires_aux,
+            weight=float(weight_raw),
             variables=find_variables(prompt),
             source_dir=path.parent,
         )
@@ -227,6 +240,7 @@ def render_spec_files(
     direction: str = "MAXIMIZE",
     scorers: list[dict[str, Any]] | None = None,
     use_structured_output: bool = False,
+    weight: float = 1.0,
 ) -> tuple[str, str]:
     """Render (eval.yaml text, prompt.md text) without writing anything."""
     config: dict[str, Any] = {"name": name}
@@ -235,6 +249,8 @@ def render_spec_files(
     config["direction"] = direction
     if labels:
         config["labels"] = labels
+    if weight != 1.0:  # omit the default to keep ordinary specs clean
+        config["weight"] = weight
     if use_structured_output:
         config["use_structured_output"] = use_structured_output
     if prompt.strip():
@@ -255,6 +271,7 @@ def write_spec(
     direction: str = "MAXIMIZE",
     scorers: list[dict[str, Any]] | None = None,
     use_structured_output: bool = False,
+    weight: float = 1.0,
     force: bool = False,
 ) -> EvalSpec:
     """Write eval.yaml + prompt.md into dest_dir, then re-load to validate."""
@@ -265,7 +282,7 @@ def write_spec(
 
     yaml_text, prompt_text = render_spec_files(
         name=name, description=description, labels=labels, prompt=prompt, direction=direction,
-        scorers=scorers, use_structured_output=use_structured_output,
+        scorers=scorers, use_structured_output=use_structured_output, weight=weight,
     )
     dest_dir.mkdir(parents=True, exist_ok=True)
     yaml_path.write_text(yaml_text)

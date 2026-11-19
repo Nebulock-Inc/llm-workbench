@@ -24,6 +24,10 @@ import click
               help="Keep this metric out of the aggregate/composite (by eval name or '<eval> / <scorer>' "
                    "label); still shown in the per-metric mean table. Repeatable. Use for metrics on a "
                    "different scale.")
+@click.option("--weight", "weights", multiple=True, metavar="EVAL=FLOAT",
+              help="Override an eval's composite weight recorded at run time, e.g. --weight hallucination=3. "
+                   "Positive float; repeatable. Non-uniform weights fit the mixed model on the weighted "
+                   "composite (score ~ C(model)).")
 @click.option("--out-dir", default=None, help="Write analysis.json/.md (+plots) here. Default: alongside RESULTS.")
 @click.option("--plots/--no-plots", default=True, show_default=True, help="Generate matplotlib figures.")
 @click.option("--standardize/--raw", default=True, show_default=True,
@@ -33,12 +37,25 @@ import click
                    "(assumes one shared scale — a judge scorer emitting 0/1 guardrail scores is pooled "
                    "too, so --exclude-metric differently-scaled judge metrics).")
 @click.option("--verbose/--simple", default=False, help="Full stats vs. headline results only.")
-def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, exclude_metrics, out_dir,
+def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, exclude_metrics, weights, out_dir,
             plots, standardize, verbose):
     """Run mixed-effects + nonparametric tests (where appropriate) on RESULTS.
 
     RESULTS is a run directory or its results.jsonl.
     """
+    weight_overrides: dict[str, float] = {}
+    for item in weights:
+        name, sep, raw = item.partition("=")
+        name = name.strip()
+        if not sep or not name:
+            raise click.ClickException(f"--weight expects EVAL=FLOAT, got {item!r}.")
+        try:
+            value = float(raw)
+        except ValueError as exc:
+            raise click.ClickException(f"--weight {item!r}: {raw!r} is not a number.") from exc
+        if value <= 0:
+            raise click.ClickException(f"--weight {item!r}: weight must be > 0.")
+        weight_overrides[name] = value
     try:
         import pandas  # noqa: F401
         import scipy  # noqa: F401
@@ -67,6 +84,7 @@ def analyze(results, reference, alpha, margin, eval_filter, scorer_filter, exclu
             scorer_filter=list(scorer_filter) or None,
             exclude_metrics=list(exclude_metrics) or None,
             standardize=standardize,
+            weights=weight_overrides or None,
             verbose=verbose,
         )
     except (ValueError, FileNotFoundError) as exc:

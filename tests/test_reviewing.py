@@ -54,6 +54,23 @@ def test_judge_decisions_dedupes_latest_and_excludes_task_errors(tmp_path):
     assert decisions[0]["judge_score"] == 5
 
 
+def test_judge_decisions_carries_aux(tmp_path):
+    # A task may keep judged prose in aux while output is a terse check-target; the
+    # decision must carry aux so the calibration UI can show what the judge scored.
+    row = _result("m1", "r1", [{"eval": "E1", "scorer": "judge", "score": 4}], output="Valid Accounts")
+    row["aux"] = {"explanation": "a stale account became active"}
+    out = _write_results(tmp_path, [row])
+    d = judge_decisions(out)[0]
+    assert d["output"] == "Valid Accounts"
+    assert d["aux"] == {"explanation": "a stale account became active"}
+
+
+def test_judge_decisions_aux_defaults_to_empty_dict(tmp_path):
+    # Older runs (and rows with no aux) must not break: aux defaults to {}.
+    out = _write_results(tmp_path, [_result("m1", "r1", [{"eval": "E1", "scorer": "judge", "score": 3}])])
+    assert judge_decisions(out)[0]["aux"] == {}
+
+
 def test_eval_and_model_filters(tmp_path):
     rows = [
         _result("m1", "r1", [{"eval": "E1", "scorer": "judge", "score": 4}]),
