@@ -45,6 +45,8 @@ Extras keep the base install light; add the ones you need:
 
 Combine them as needed, e.g. `uv add "llm-workbench[analysis,anthropic]"`.
 
+Using conda instead of uv? It works, with a few project-specific caveats — see [Installing with conda](docs/installing-with-conda.md).
+
 Everything is driven by one CLI, `llm-workbench` (verify the install):
 
 ```bash
