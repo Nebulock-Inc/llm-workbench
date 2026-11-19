@@ -14,13 +14,13 @@ The `llm-workbench` Python library guides data scientists and machine learning p
 
 The toolkit supports the following tasks:
 
-* Defining your task (what your LLM needs to do)
-* Creating and calibrating evals
-* Running a small pilot study
-* Running power analysis to know how many prompts you need
-* Creating test set of prompts
-* Running the experiment, collecting prompt/response pairs using LLMs from Anthropic, OpenAI, Ollama, or AWS Bedrock (including Bedrock Mantle)
-* Analyzing the results, selecting the best model for your use case
+* [Defining your task](#defining-your-task) (what your LLM needs to do)
+* [Creating](#eval-creation) and [calibrating](#calibrating-the-judge) evals
+* Running a small [pilot study](#pilot-study)
+* Running [power analysis](#power-analysis---how-many-prompts) to know how many prompts you need
+* Creating a [test set of prompts](#prompt-test-set-creation)
+* [Running the experiment](#running-the-experiment), collecting prompt/response pairs using LLMs from Anthropic, OpenAI, Ollama, or AWS Bedrock (including Bedrock Mantle)
+* [Analyzing the results](#result-analysis), selecting the best model for your use case
 
 
 
@@ -55,7 +55,7 @@ llm-workbench --help
 
 The workflow follows the sections below: **define your task → create evals → run a small pilot → size the study with power analysis → build the full test set → run the comparison → analyze the results.**
 
-![Architecture overview: the llm-workbench experiment pipeline, from task definition through evals, pilot, power analysis, running the comparison, and result analysis](docs/architecture-overview.png)
+![Architecture overview: the llm-workbench experiment pipeline, from task definition through evals, pilot, power analysis, running the comparison, and result analysis](docs/visuals/architecture-overview.png)
 
 Read on to learn how to use it for all these steps.
 
@@ -413,7 +413,13 @@ The CSV covers only tasks that produced a usable output — task-level failures 
 llm-workbench analyze runs/experiment-1 --reference anthropic/claude-sonnet-4-5
 ```
 
+![Analysis report, first two tables](docs/visuals/report_top.png)
+
+
 It first reports **reliability** — each model's task-completion rate (fraction of prompts that produced a usable answer, computed from every recorded row including failures). This matters because the quality stats below are complete-case: they only cover prompts a model actually answered, so a model that fails often can still post strong quality scores. Read reliability and quality together.
+
+
+![Analysis mixed effects model, terminal view](docs/visuals/terminal_mlm.png)
 
 It then shows an overall means table per model and a mean-score table for each individual metric. The full statistical battery runs on a single **quality composite** (the aggregate across quality metrics) — one family of tests on the aggregate, rather than per-metric, to keep the multiple-comparisons story clean. If you want to drill into a single metric, filter with `--eval` / `--scorer` and re-run. On the composite it reports where appropriate:
 
@@ -446,6 +452,9 @@ Before you trust the LLM judge's scores, check that they match your own. `llm-wo
 ```bash
 llm-workbench calibrate runs/experiment-1
 ```
+![Calibration UI](docs/visuals/calibration_tui.png)
+
+
 
 It's resumable (already-reviewed decisions are skipped unless `--re-review`) and saves your scores to `<run>/review.jsonl`. At the end — or any time with `--stats` — it reports judge-vs-human **calibration** per eval: **bias** (mean judge − mean human; positive means the judge scores higher than you), plus exact- and within-1-agreement rates. A large bias or low agreement is a signal to revise the rubric or judge prompt before drawing conclusions from a run.
 
