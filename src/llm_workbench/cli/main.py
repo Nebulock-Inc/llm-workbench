@@ -13,7 +13,12 @@ from llm_workbench.cli.commands.power import power
 from llm_workbench.cli.commands.run import run
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(
+    context_settings={"help_option_names": ["-h", "--help"]},
+    epilog="In Claude Code? Run `llm-workbench init --with-skills` to scaffold guided skills "
+           "(setup, task, evals, pilot, power, run, analysis), or install the plugin. "
+           "See the README's \"Guided workflow with Claude Code skills\".",
+)
 @click.version_option(__version__, "-V", "--version", prog_name="llm-workbench")
 @click.option("--provider-module", "provider_modules", multiple=True,
               help="Import a custom model-provider module before running (repeatable). "

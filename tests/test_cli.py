@@ -15,6 +15,8 @@ def test_help_lists_command_groups():
     assert result.exit_code == 0
     for group in ("calibrate", "evals", "models", "run"):
         assert group in result.output
+    # The epilog points terminal users (who may never read the README) at the skills.
+    assert "--with-skills" in result.output
     # `review` was renamed to `calibrate` — the old command no longer exists.
     gone = CliRunner().invoke(cli, ["review", "--help"])
     assert gone.exit_code != 0 and "No such command" in gone.output
