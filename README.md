@@ -107,11 +107,11 @@ a rubric or judge-model change, or re-scoring a past run. See
 ## Guided workflow with Claude Code skills
 
 If you use [Claude Code](https://claude.com/claude-code), this toolkit ships a set of skills
-that guide you through the whole workflow — setup, defining a task, creating and calibrating
+that guide you through the whole workflow, including setup, defining a task, creating and calibrating
 evals, a pilot, power analysis, the full run, and the analysis. They drive the CLI *and*
 explain how to read the results, so you can lean on them instead of the manual steps below.
 Open your project in Claude Code and ask something like *"which model should I use for my
-task?"* — the guide takes it from there.
+task?"*.
 
 Get them one of two ways:
 
