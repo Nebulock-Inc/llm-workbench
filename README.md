@@ -418,17 +418,29 @@ llm-workbench analyze runs/experiment-1 --reference anthropic/claude-sonnet-4-5
 
 It first reports **reliability** — each model's task-completion rate (fraction of prompts that produced a usable answer, computed from every recorded row including failures). This matters because the quality stats below are complete-case: they only cover prompts a model actually answered, so a model that fails often can still post strong quality scores. Read reliability and quality together.
 
+![Quality tables part 1](docs/visuals/report_middle.png)
 
-![Analysis mixed effects model, terminal view](docs/visuals/terminal_mlm.png)
+It then shows an overall means table per model and a mean-score table for each individual metric. 
 
-It then shows an overall means table per model and a mean-score table for each individual metric. The full statistical battery runs on a single **quality composite** (the aggregate across quality metrics) — one family of tests on the aggregate, rather than per-metric, to keep the multiple-comparisons story clean. If you want to drill into a single metric, filter with `--eval` / `--scorer` and re-run. On the composite it reports where appropriate:
+![Means table and mixed effects summary](docs/visuals/report_middle2.png)
+
+The full statistical battery runs on a single **quality composite** (the aggregate across quality metrics) — one family of tests on the aggregate, rather than per-metric, to keep the multiple-comparisons story clean. If you want to drill into a single metric, filter with `--eval` / `--scorer` and re-run. On the composite it reports where appropriate:
 
 - **Nonparametric**: Friedman test + Kendall's W (omnibus across ≥3 models), with Holm-corrected pairwise Wilcoxon signed-rank post-hocs.
 - **Mixed-effects model**: `score ~ model` with a random intercept per prompt — each model's difference from the reference, with significance. (Graded data only; skipped for binary pass/fail.)
 - **Paired Cohen's d**: practical effect-size magnitude for each model pair.
 - **TOST equivalence**: whether two models are *statistically the same* within a margin (`--margin`) — something significance tests can't tell you.
 
+
+![Analysis mixed effects model, terminal view](docs/visuals/terminal_mlm.png)
+
+
+![Additional statistical battery results](docs/visuals/report_end.png)
+
+
 It prints rich tables with plain-language interpretation and writes `analysis.json`, `analysis.md`, and comparison plots (`--out-dir`, default: alongside RESULTS; `--no-plots` to skip the figures).
+
+
 
 Options:
 
