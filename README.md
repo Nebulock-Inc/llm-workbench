@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/llm-workbench)](https://pypi.org/project/llm-workbench/)
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Nebulock-Inc/llm-workbench/blob/main/LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/Nebulock-Inc/llm-workbench/blob/main/LICENSE)
 
 **[Quickstart](#quickstart-scaffold-a-starter-and-run-it)** • **[Install](#install--setup)** • **[Define a task](#defining-your-task)** • **[Run a comparison](#running-the-experiment)** • **[Analyze results](#result-analysis)** • **[Examples](examples/)**
 
